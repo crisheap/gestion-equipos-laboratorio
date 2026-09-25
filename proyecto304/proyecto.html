@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Laboratorios - Universidad Antonio Nariño</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --primary:#003366; --accent:#d9534f; --success:#28a745; --bg:#f4f6f9; }
+        * { box-sizing:border-box; margin:0; padding:0; font-family:'Segoe UI',Tahoma,sans-serif; }
+        body { background-color:var(--bg); color:#333; line-height:1.6; }
+        header { background-color:var(--primary); color:white; padding:1rem 2rem; display:flex; justify-content:space-between; align-items:center; gap:15px; }
+        .btn { padding:8px 16px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; }
+        .btn-primary { background-color:#0056b3; color:white; }
+        .btn-success { background-color:var(--success); color:white; }
+        .btn-danger { background-color:var(--accent); color:white; }
+        .alert-info { background-color:#e2e3e5; padding:12px; border-radius:6px; margin:20px auto; max-width:1200px; border-left:4px solid var(--primary); }
+        .filters { max-width:1200px; margin:0 auto 20px; padding:0 10px; display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px; }
+        .filters input,.filters select,.form-group input,.form-group select { width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; background:white; }
+        .labs-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:20px; max-width:1200px; margin:0 auto; padding:0 10px 30px; }
+        .lab-card { background:white; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.1); border-top:5px solid var(--primary); padding:15px; }
+        .lab-header { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px; }
+        .status-badge { padding:4px 10px; border-radius:12px; font-size:.85rem; font-weight:bold; white-space:nowrap; }
+        .status-disponible { background:#d4edda; color:#155724; }
+        .status-ocupado { background:#f8d7da; color:#721c24; }
+        .equipment-item { padding:12px 0; border-bottom:1px dashed #ddd; }
+        .equipment-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+        .equipment-meta { color:#666; font-size:.9rem; margin-top:3px; }
+        .equipment-attrs { color:#555; font-size:.85rem; margin:5px 0 9px; }
+        .modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.6); justify-content:center; align-items:center; z-index:1000; padding:15px; }
+        .modal-content { background:white; padding:25px; border-radius:8px; width:100%; max-width:430px; max-height:90vh; overflow:auto; }
+        .form-group { margin-bottom:15px; }
+        .form-group label { display:block; margin-bottom:5px; font-weight:600; }
+        .close-btn { background:none; border:none; font-size:1.5rem; float:right; cursor:pointer; }
+        .empty { grid-column:1/-1; text-align:center; padding:30px; color:#666; background:white; border-radius:8px; }
+        @media(max-width:700px){ .filters{grid-template-columns:1fr;} header{padding:1rem; flex-direction:column; align-items:flex-start;} }
+    </style>
+</head>
+<body>
+<header>
+    <h1>UAN — Gestión de Equipos</h1>
+    <div id="authContainer"></div>
+</header>
+
+<div class="alert-info">
+    <strong>Vista Pública:</strong> Consulta los equipos disponibles. Para apartar un equipo, inicia sesión con tu correo <code>@uan.edu.co</code>.
+</div>
+
+<div class="filters">
+    <input type="search" id="searchInput" placeholder="Buscar equipo por nombre, tipo o ubicación...">
+    <select id="typeFilter"><option value="">Todos los tipos</option></select>
+    <select id="locationFilter"><option value="">Todas las ubicaciones</option></select>
+</div>
+
+<div class="labs-grid" id="labsContainer"></div>
+
+<div class="modal" id="registerModal">
+    <div class="modal-content">
+        <button class="close-btn" onclick="closeModal('registerModal')">&times;</button>
+        <h2>Registro Estudiantil</h2>
+        <form onsubmit="handleRegister(event)">
+            <div class="form-group"><label>Correo (@uan.edu.co)</label><input type="email" id="regEmail" required></div>
+            <div class="form-group"><label>Contraseña</label><input type="password" id="regPass" required minlength="6"></div>
+            <button type="submit" class="btn btn-success" style="width:100%;">Crear Cuenta</button>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="loginModal">
+    <div class="modal-content">
+        <button class="close-btn" onclick="closeModal('loginModal')">&times;</button>
+        <h2>Iniciar Sesión</h2>
+        <form onsubmit="handleLogin(event)">
+            <div class="form-group"><label>Correo Institucional</label><input type="email" id="loginEmail" required></div>
+            <div class="form-group"><label>Contraseña</label><input type="password" id="loginPass" required></div>
+            <button type="submit" class="btn btn-primary" style="width:100%;">Ingresar</button>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="reserveModal">
+    <div class="modal-content">
+        <button class="close-btn" onclick="closeModal('reserveModal')">&times;</button>
+        <h2>Apartar Equipo</h2>
+        <form onsubmit="handleReserve(event)">
+            <input type="hidden" id="reserveEquipId">
+            <div class="form-group"><label>Equipo</label><input type="text" id="reserveEquipName" disabled style="background:#eee;"></div>
+            <div class="form-group"><label>Fecha</label><input type="date" id="reserveDate" required></div>
+            <div class="form-group"><label>Franja horaria</label><select id="reserveSlot" required><option value="">Selecciona primero una fecha</option></select></div>
+            <button type="submit" class="btn btn-success" style="width:100%;">Confirmar Reserva</button>
+        </form>
+    </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://igfzfwwanfcfjykctyzx.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_sGW6smHvi2Aje80TYznL5A_kfhEFG-t';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let recursos = [];
+
+supabaseClient.auth.onAuthStateChange((event, session) => {
+    currentUser = session ? session.user : null;
+    updateAuthUI();
+    cargarDatosSupabase();
+});
+
+document.getElementById('searchInput').addEventListener('input', aplicarFiltros);
+document.getElementById('typeFilter').addEventListener('change', aplicarFiltros);
+document.getElementById('locationFilter').addEventListener('change', aplicarFiltros);
+document.getElementById('reserveDate').addEventListener('change', cargarFranjasDisponibles);
+
+function escaparHTML(texto) {
+    return String(texto ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+
+async function cargarDatosSupabase() {
+    const container = document.getElementById('labsContainer');
+
+    const { data, error } = await supabaseClient
+        .from('recursos')
+        .select('id,nombre,tipo,ubicacion,capacidad,atributos,activo')
+        .eq('activo', 1)
+        .order('tipo')
+        .order('nombre');
+
+    if (error) {
+        console.error(error);
+        container.innerHTML = '<div class="empty">No se pudieron cargar los equipos. Verifica que las tablas <strong>recursos</strong> y <strong>franjas</strong> estén creadas en Supabase.</div>';
+        return;
+    }
+
+    recursos = data || [];
+    cargarFiltros();
+    aplicarFiltros();
+}
+
+function cargarFiltros() {
+    const tipos = [...new Set(recursos.map(r => r.tipo))].sort();
+    const ubicaciones = [...new Set(recursos.map(r => r.ubicacion))].sort();
+
+    document.getElementById('typeFilter').innerHTML =
+        '<option value="">Todos los tipos</option>' +
+        tipos.map(t => `<option value="${escaparHTML(t)}">${escaparHTML(t)}</option>`).join('');
+
+    document.getElementById('locationFilter').innerHTML =
+        '<option value="">Todas las ubicaciones</option>' +
+        ubicaciones.map(u => `<option value="${escaparHTML(u)}">${escaparHTML(u)}</option>`).join('');
+}
+
+function aplicarFiltros() {
+    const texto = document.getElementById('searchInput').value.toLowerCase().trim();
+    const tipo = document.getElementById('typeFilter').value;
+    const ubicacion = document.getElementById('locationFilter').value;
+
+    const filtrados = recursos.filter(r => {
+        const contenido = `${r.nombre} ${r.tipo} ${r.ubicacion} ${r.atributos || ''}`.toLowerCase();
+        return (!texto || contenido.includes(texto)) &&
+               (!tipo || r.tipo === tipo) &&
+               (!ubicacion || r.ubicacion === ubicacion);
+    });
+
+    renderizarRecursos(filtrados);
+}
+
+function renderizarRecursos(lista) {
+    const container = document.getElementById('labsContainer');
+
+    if (!lista.length) {
+        container.innerHTML = '<div class="empty">No se encontraron equipos con esos criterios.</div>';
+        return;
+    }
+
+    const grupos = {};
+    lista.forEach(eq => {
+        if (!grupos[eq.ubicacion]) grupos[eq.ubicacion] = [];
+        grupos[eq.ubicacion].push(eq);
+    });
+
+    container.innerHTML = Object.entries(grupos).map(([ubicacion, equipos]) => `
+        <div class="lab-card">
+            <div class="lab-header">
+                <h3>${escaparHTML(ubicacion)}</h3>
+                <span class="status-badge status-disponible">Catálogo</span>
+            </div>
+            <div>
+                ${equipos.map(eq => `
+                    <div class="equipment-item">
+                        <div class="equipment-top">
+                            <div>
+                                <strong>${escaparHTML(eq.nombre)}</strong>
+                                <div class="equipment-meta">${escaparHTML(eq.tipo)} · Capacidad: ${eq.capacidad}</div>
+                            </div>
+                            <button class="btn btn-primary" onclick="requestReserve(${eq.id}, '${String(eq.nombre).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">Apartar</button>
+                        </div>
+                        <div class="equipment-attrs">${escaparHTML(eq.atributos || '')}</div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+function validarCorreoUAN(email) {
+    return email.toLowerCase().endsWith('@uan.edu.co');
+}
+
+async function handleRegister(e) {
+    e.preventDefault();
+    const email = document.getElementById('regEmail').value.trim();
+    const password = document.getElementById('regPass').value;
+
+    if (!validarCorreoUAN(email)) return alert('Solo se permiten correos @uan.edu.co');
+
+    const { error } = await supabaseClient.auth.signUp({ email, password });
+    if (error) return alert('Error: ' + error.message);
+
+    alert('Registro exitoso. Si Supabase solicita confirmación, revisa tu correo.');
+    closeModal('registerModal');
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPass').value;
+
+    if (!validarCorreoUAN(email)) return alert('Solo se permiten correos @uan.edu.co');
+
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) return alert('Error: ' + error.message);
+    closeModal('loginModal');
+}
+
+async function handleLogout() {
+    await supabaseClient.auth.signOut();
+}
+
+function updateAuthUI() {
+    document.getElementById('authContainer').innerHTML = currentUser
+        ? `<span>${escaparHTML(currentUser.email)}</span> <button class="btn btn-danger" onclick="handleLogout()">Salir</button>`
+        : `<button class="btn btn-primary" onclick="openModal('loginModal')">Iniciar Sesión</button>
+           <button class="btn btn-success" onclick="openModal('registerModal')">Registrarse</button>`;
+}
+
+function requestReserve(equipId, equipName) {
+    if (!currentUser) return alert('Debes iniciar sesión con @uan.edu.co para apartar.');
+
+    document.getElementById('reserveEquipId').value = equipId;
+    document.getElementById('reserveEquipName').value = equipName;
+
+    const hoy = new Date();
+    const fecha = new Date(hoy.getTime() - hoy.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+    const inputFecha = document.getElementById('reserveDate');
+    inputFecha.min = fecha;
+    inputFecha.value = fecha;
+
+    cargarFranjasDisponibles();
+    openModal('reserveModal');
+}
+
+async function cargarFranjasDisponibles() {
+    const equipId = parseInt(document.getElementById('reserveEquipId').value);
+    const fecha = document.getElementById('reserveDate').value;
+    const select = document.getElementById('reserveSlot');
+
+    if (!equipId || !fecha) return;
+
+    select.innerHTML = '<option value="">Cargando...</option>';
+
+    const { data: franjas, error } = await supabaseClient
+        .from('franjas')
+        .select('id,hora_inicio,hora_fin')
+        .eq('recurso_id', equipId)
+        .eq('fecha', fecha)
+        .order('hora_inicio');
+
+    if (error) {
+        console.error(error);
+        select.innerHTML = '<option value="">Error cargando franjas</option>';
+        return;
+    }
+
+    if (!franjas.length) {
+        select.innerHTML = '<option value="">No hay franjas para esta fecha</option>';
+        return;
+    }
+
+    const ids = franjas.map(f => f.id);
+    const { data: reservas, error: errorReservas } = await supabaseClient
+        .from('reservas')
+        .select('franja_id')
+        .in('franja_id', ids)
+        .eq('estado', 'activa');
+
+    if (errorReservas) {
+        console.error(errorReservas);
+        select.innerHTML = '<option value="">Error consultando disponibilidad</option>';
+        return;
+    }
+
+    const ocupadas = new Set((reservas || []).map(r => r.franja_id));
+    const libres = franjas.filter(f => !ocupadas.has(f.id));
+
+    select.innerHTML = libres.length
+        ? libres.map(f => `<option value="${f.id}">${f.hora_inicio.slice(0,5)} - ${f.hora_fin.slice(0,5)}</option>`).join('')
+        : '<option value="">No hay franjas disponibles</option>';
+}
+
+async function handleReserve(e) {
+    e.preventDefault();
+
+    if (!currentUser) return alert('Tu sesión expiró. Inicia sesión nuevamente.');
+
+    const equipId = parseInt(document.getElementById('reserveEquipId').value);
+    const franjaId = parseInt(document.getElementById('reserveSlot').value);
+    const fecha = document.getElementById('reserveDate').value;
+
+    if (!franjaId) return alert('Selecciona una franja disponible.');
+
+    // El correo de Auth debe corresponder a uno de los usuarios semilla del profesor.
+    const { data: usuario, error: errorUsuario } = await supabaseClient
+        .from('usuarios')
+        .select('id')
+        .eq('correo', currentUser.email)
+        .maybeSingle();
+
+    if (errorUsuario || !usuario) {
+        return alert('Tu correo de inicio de sesión no está registrado en la tabla usuarios. Usa uno de los usuarios cargados en los datos del profesor.');
+    }
+
+    const { data: franja, error: errorFranja } = await supabaseClient
+        .from('franjas')
+        .select('hora_inicio,hora_fin')
+        .eq('id', franjaId)
+        .single();
+
+    if (errorFranja || !franja) return alert('No se pudo consultar la franja seleccionada.');
+
+    // Validación en cliente para evitar reservar una franja pasada.
+    const ahora = new Date();
+    const seleccion = new Date(`${fecha}T${franja.hora_inicio}`);
+    if (seleccion < ahora) return alert('No se puede reservar una franja que ya pasó.');
+
+    const { data: existentes, error: errorExistentes } = await supabaseClient
+        .from('reservas')
+        .select('id')
+        .eq('franja_id', franjaId)
+        .eq('estado', 'activa')
+        .limit(1);
+
+    if (errorExistentes) return alert('No se pudo comprobar la disponibilidad.');
+    if (existentes && existentes.length) {
+        await cargarFranjasDisponibles();
+        return alert('Esa franja acaba de ser reservada por otra persona. Selecciona otra.');
+    }
+
+    const { error } = await supabaseClient.from('reservas').insert([{
+        franja_id: franjaId,
+        recurso_id: equipId,
+        usuario_id: usuario.id,
+        fecha: fecha,
+        hora_inicio: franja.hora_inicio,
+        hora_fin: franja.hora_fin,
+        estado: 'activa',
+        creada_en: new Date().toISOString()
+    }]);
+
+    if (error) {
+        console.error(error);
+        return alert('Error registrando la reserva: ' + error.message);
+    }
+
+    closeModal('reserveModal');
+    alert(`Reserva realizada para ${fecha}, ${franja.hora_inicio.slice(0,5)} - ${franja.hora_fin.slice(0,5)}.`);
+}
+
+function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+window.onload = async () => {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    currentUser = session ? session.user : null;
+    updateAuthUI();
+    cargarDatosSupabase();
+};
+</script>
+</body>
+</html>
