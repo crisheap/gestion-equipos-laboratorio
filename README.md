@@ -6,7 +6,8 @@
 
 > **Regla propia del proyecto:** todo equipo prestado debe ser devuelto antes de una hora tope establecida.
 
-[![Aplicación](https://img.shields.io/badge/demo-gestionproyecto304.netlify.app-00C7B7?logo=netlify&logoColor=white)](https://gestionproyecto304.netlify.app/)
+[![Aplicación](https://img.shields.io/badge/demo-superlative--klepon--d1cb47.netlify.app-00C7B7?logo=netlify&logoColor=white)](https://superlative-klepon-d1cb47.netlify.app/)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/50eae96a-61c3-42ed-9554-922536bf407b/deploy-status)](https://app.netlify.com/projects/superlative-klepon-d1cb47/deploys)
 ![Sprint](https://img.shields.io/badge/Sprint%203-11%E2%80%9327%20nov%202026-1F3864)
 ![Backlog](https://img.shields.io/badge/backlog-7%20historias%20%C2%B7%2047%20SP-2E75B6)
 ![Stack](https://img.shields.io/badge/stack-HTML%20%C2%B7%20JS%20%C2%B7%20Supabase-3ECF8E?logo=supabase&logoColor=white)
@@ -112,7 +113,7 @@ En **Authentication → Providers**, habilitar *Email*. Solo pueden reservar las
 ### 3. Publicación
 
 1. En [`proyecto304/proyecto.html`](proyecto304/proyecto.html), `SUPABASE_URL` y `SUPABASE_KEY` deben ser los del proyecto. La clave *publishable* es pública por diseño; la seguridad la dan las políticas RLS.
-2. Publicar la carpeta `proyecto304/` en Netlify (arrastrando la carpeta o conectando este repositorio con `proyecto304` como directorio de publicación).
+2. **Despliegue continuo:** el sitio de Netlify `superlative-klepon-d1cb47` está conectado a este repositorio. Cada push a `main` publica automáticamente, según [`netlify.toml`](netlify.toml): publica `proyecto304/` sin compilación, muestra `proyecto.html` en la raíz y no expone los scripts SQL.
 
 > **Plan gratuito:** Supabase pausa el proyecto tras una semana sin uso. Abrir la URL 24 h y 1 h antes de cada Sprint Review (riesgo R-03).
 
