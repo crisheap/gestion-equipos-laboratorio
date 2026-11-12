@@ -1,0 +1,38 @@
+# Configuración de Netlify · Gestión de Equipos de Laboratorio (Error 404)
+# Sitio estático: no hay paso de compilación. Netlify publica la carpeta proyecto304/.
+
+[build]
+  publish = "proyecto304"
+  command = "echo 'Sitio estático: sin compilación'"
+
+# La aplicación vive en proyecto.html: la raíz del sitio la muestra directamente.
+[[redirects]]
+  from = "/"
+  to = "/proyecto.html"
+  status = 200
+
+# Los scripts SQL y los README no se publican.
+[[redirects]]
+  from = "/*.sql"
+  to = "/proyecto.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/migraciones/*"
+  to = "/proyecto.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/pruebas/*"
+  to = "/proyecto.html"
+  status = 404
+  force = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
