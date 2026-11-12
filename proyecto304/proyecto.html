@@ -15,7 +15,7 @@
         .btn-success { background-color:var(--success); color:white; }
         .btn-danger { background-color:var(--accent); color:white; }
         .alert-info { background-color:#e2e3e5; padding:12px; border-radius:6px; margin:20px auto; max-width:1200px; border-left:4px solid var(--primary); }
-        .filters { max-width:1200px; margin:0 auto 20px; padding:0 10px; display:grid; grid-template-columns:2fr 1fr 1fr; gap:10px; }
+        .filters { max-width:1200px; margin:0 auto 20px; padding:0 10px; display:grid; grid-template-columns:2fr 1fr 1fr 1fr; gap:10px; }
         .filters input,.filters select,.form-group input,.form-group select { width:100%; padding:10px; border:1px solid #ccc; border-radius:4px; background:white; }
         .labs-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:20px; max-width:1200px; margin:0 auto; padding:0 10px 30px; }
         .lab-card { background:white; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.1); border-top:5px solid var(--primary); padding:15px; }
@@ -23,6 +23,10 @@
         .status-badge { padding:4px 10px; border-radius:12px; font-size:.85rem; font-weight:bold; white-space:nowrap; }
         .status-disponible { background:#d4edda; color:#155724; }
         .status-ocupado { background:#f8d7da; color:#721c24; }
+        .status-mantenimiento { background:#fff3cd; color:#856404; }
+        .status-resumen { background:#e2e3e5; color:#383d41; }
+        .btn:disabled { opacity:.5; cursor:not-allowed; }
+        .hint { color:#666; font-size:.85rem; margin-top:4px; }
         .equipment-item { padding:12px 0; border-bottom:1px dashed #ddd; }
         .equipment-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
         .equipment-meta { color:#666; font-size:.9rem; margin-top:3px; }
@@ -50,6 +54,12 @@
     <input type="search" id="searchInput" placeholder="Buscar equipo por nombre, tipo o ubicación...">
     <select id="typeFilter"><option value="">Todos los tipos</option></select>
     <select id="locationFilter"><option value="">Todas las ubicaciones</option></select>
+    <select id="statusFilter">
+        <option value="">Todos los estados</option>
+        <option value="disponible">Disponible</option>
+        <option value="prestado">Prestado ahora</option>
+        <option value="mantenimiento">En mantenimiento</option>
+    </select>
 </div>
 
 <div class="labs-grid" id="labsContainer"></div>
@@ -86,7 +96,8 @@
             <input type="hidden" id="reserveEquipId">
             <div class="form-group"><label>Equipo</label><input type="text" id="reserveEquipName" disabled style="background:#eee;"></div>
             <div class="form-group"><label>Fecha</label><input type="date" id="reserveDate" required></div>
-            <div class="form-group"><label>Franja horaria</label><select id="reserveSlot" required><option value="">Selecciona primero una fecha</option></select></div>
+            <div class="form-group"><label>Franja horaria</label><select id="reserveSlot" required><option value="">Selecciona primero una fecha</option></select>
+                <div class="hint" id="reserveTope"></div></div>
             <button type="submit" class="btn btn-success" style="width:100%;">Confirmar Reserva</button>
         </form>
     </div>
@@ -109,6 +120,7 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
 document.getElementById('searchInput').addEventListener('input', aplicarFiltros);
 document.getElementById('typeFilter').addEventListener('change', aplicarFiltros);
 document.getElementById('locationFilter').addEventListener('change', aplicarFiltros);
+document.getElementById('statusFilter').addEventListener('change', aplicarFiltros);
 document.getElementById('reserveDate').addEventListener('change', cargarFranjasDisponibles);
 
 function escaparHTML(texto) {
@@ -120,18 +132,36 @@ async function cargarDatosSupabase() {
 
     const { data, error } = await supabaseClient
         .from('recursos')
-        .select('id,nombre,tipo,ubicacion,capacidad,atributos,activo')
-        .eq('activo', 1)
+        .select('*')
         .order('tipo')
         .order('nombre');
 
     if (error) {
         console.error(error);
-        container.innerHTML = '<div class="empty">No se pudieron cargar los equipos. Verifica que las tablas <strong>recursos</strong> y <strong>franjas</strong> estén creadas en Supabase.</div>';
+        container.innerHTML = '<div class="empty">No se pudieron cargar los equipos. Intenta de nuevo en unos minutos.</div>';
         return;
     }
 
-    recursos = data || [];
+    // Estado actual de cada equipo: en mantenimiento (inactivo), prestado ahora
+    // (reserva activa en la franja en curso) o disponible. Solo es informativo:
+    // la regla de disponibilidad se valida en el servidor al reservar.
+    const ahora = fechaHoraBogota();
+    const { data: enCurso } = await supabaseClient
+        .from('reservas')
+        .select('recurso_id,hora_inicio,hora_fin')
+        .eq('fecha', ahora.fecha)
+        .eq('estado', 'activa');
+
+    const prestados = new Set((enCurso || [])
+        .filter(r => r.hora_inicio <= ahora.hora && ahora.hora < r.hora_fin)
+        .map(r => r.recurso_id));
+
+    recursos = (data || []).map(r => ({
+        ...r,
+        // Si la migración 001 aún no se aplicó, la hora tope se lee de los atributos.
+        hora_tope: r.hora_tope || ((r.atributos || '').match(/hora tope (\d{2}:\d{2})/) || [])[1] + ':00',
+        estado: r.activo !== 1 ? 'mantenimiento' : (prestados.has(r.id) ? 'prestado' : 'disponible')
+    }));
     cargarFiltros();
     aplicarFiltros();
 }
@@ -153,12 +183,14 @@ function aplicarFiltros() {
     const texto = document.getElementById('searchInput').value.toLowerCase().trim();
     const tipo = document.getElementById('typeFilter').value;
     const ubicacion = document.getElementById('locationFilter').value;
+    const estado = document.getElementById('statusFilter').value;
 
     const filtrados = recursos.filter(r => {
         const contenido = `${r.nombre} ${r.tipo} ${r.ubicacion} ${r.atributos || ''}`.toLowerCase();
         return (!texto || contenido.includes(texto)) &&
                (!tipo || r.tipo === tipo) &&
-               (!ubicacion || r.ubicacion === ubicacion);
+               (!ubicacion || r.ubicacion === ubicacion) &&
+               (!estado || r.estado === estado);
     });
 
     renderizarRecursos(filtrados);
@@ -182,7 +214,7 @@ function renderizarRecursos(lista) {
         <div class="lab-card">
             <div class="lab-header">
                 <h3>${escaparHTML(ubicacion)}</h3>
-                <span class="status-badge status-disponible">Catálogo</span>
+                <span class="status-badge status-resumen">${equipos.filter(e => e.estado === 'disponible').length} de ${equipos.length} disponibles</span>
             </div>
             <div>
                 ${equipos.map(eq => `
@@ -190,16 +222,32 @@ function renderizarRecursos(lista) {
                         <div class="equipment-top">
                             <div>
                                 <strong>${escaparHTML(eq.nombre)}</strong>
-                                <div class="equipment-meta">${escaparHTML(eq.tipo)} · Capacidad: ${eq.capacidad}</div>
+                                <div class="equipment-meta">${escaparHTML(eq.tipo)} · Hora tope: ${String(eq.hora_tope || '').slice(0,5)}</div>
                             </div>
-                            <button class="btn btn-primary" onclick="requestReserve(${eq.id}, '${String(eq.nombre).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">Apartar</button>
+                            <span class="status-badge ${ETIQUETAS_ESTADO[eq.estado].clase}">${ETIQUETAS_ESTADO[eq.estado].texto}</span>
                         </div>
                         <div class="equipment-attrs">${escaparHTML(eq.atributos || '')}</div>
+                        <button class="btn btn-primary" ${eq.estado === 'mantenimiento' ? 'disabled' : ''} onclick="requestReserve(${eq.id})">Apartar</button>
                     </div>
                 `).join('')}
             </div>
         </div>
     `).join('');
+}
+
+const ETIQUETAS_ESTADO = {
+    disponible:    { texto: 'Disponible',       clase: 'status-disponible' },
+    prestado:      { texto: 'Prestado ahora',   clase: 'status-ocupado' },
+    mantenimiento: { texto: 'En mantenimiento', clase: 'status-mantenimiento' }
+};
+
+// Fecha y hora actuales en Bogotá, en el formato de la base (YYYY-MM-DD y HH:MM:SS).
+function fechaHoraBogota() {
+    const partes = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).formatToParts(new Date()).reduce((o, p) => (o[p.type] = p.value, o), {});
+    return { fecha: `${partes.year}-${partes.month}-${partes.day}`, hora: `${partes.hour}:${partes.minute}:${partes.second}` };
 }
 
 function validarCorreoUAN(email) {
@@ -243,14 +291,18 @@ function updateAuthUI() {
            <button class="btn btn-success" onclick="openModal('registerModal')">Registrarse</button>`;
 }
 
-function requestReserve(equipId, equipName) {
+function requestReserve(equipId) {
     if (!currentUser) return alert('Debes iniciar sesión con @uan.edu.co para apartar.');
 
-    document.getElementById('reserveEquipId').value = equipId;
-    document.getElementById('reserveEquipName').value = equipName;
+    const equipo = recursos.find(r => r.id === equipId);
+    if (!equipo) return;
 
-    const hoy = new Date();
-    const fecha = new Date(hoy.getTime() - hoy.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+    document.getElementById('reserveEquipId').value = equipId;
+    document.getElementById('reserveEquipName').value = equipo.nombre;
+    document.getElementById('reserveTope').textContent =
+        `Debes devolverlo antes de las ${String(equipo.hora_tope).slice(0,5)} del día de la reserva.`;
+
+    const fecha = fechaHoraBogota().fecha;
     const inputFecha = document.getElementById('reserveDate');
     inputFecha.min = fecha;
     inputFecha.value = fecha;
@@ -300,7 +352,12 @@ async function cargarFranjasDisponibles() {
     }
 
     const ocupadas = new Set((reservas || []).map(r => r.franja_id));
-    const libres = franjas.filter(f => !ocupadas.has(f.id));
+    const equipo = recursos.find(r => r.id === equipId);
+    const ahora = fechaHoraBogota();
+    const libres = franjas.filter(f =>
+        !ocupadas.has(f.id) &&
+        (!equipo || f.hora_inicio < equipo.hora_tope) &&
+        (fecha > ahora.fecha || (fecha === ahora.fecha && f.hora_inicio > ahora.hora)));
 
     select.innerHTML = libres.length
         ? libres.map(f => `<option value="${f.id}">${f.hora_inicio.slice(0,5)} - ${f.hora_fin.slice(0,5)}</option>`).join('')
@@ -312,67 +369,59 @@ async function handleReserve(e) {
 
     if (!currentUser) return alert('Tu sesión expiró. Inicia sesión nuevamente.');
 
-    const equipId = parseInt(document.getElementById('reserveEquipId').value);
     const franjaId = parseInt(document.getElementById('reserveSlot').value);
-    const fecha = document.getElementById('reserveDate').value;
-
     if (!franjaId) return alert('Selecciona una franja disponible.');
 
-    // El correo de Auth debe corresponder a uno de los usuarios semilla del profesor.
-    const { data: usuario, error: errorUsuario } = await supabaseClient
-        .from('usuarios')
-        .select('id')
-        .eq('correo', currentUser.email)
-        .maybeSingle();
+    // Todas las reglas (usuario registrado, franja futura, franja libre, hora tope)
+    // se validan en el servidor dentro de reservar_franja (migración 001).
+    let { data, error } = await supabaseClient.rpc('reservar_franja', { p_franja_id: franjaId });
 
-    if (errorUsuario || !usuario) {
-        return alert('Tu correo de inicio de sesión no está registrado en la tabla usuarios. Usa uno de los usuarios cargados en los datos del profesor.');
+    // Compatibilidad: mientras la migración 001 no esté aplicada en Supabase,
+    // la función no existe (PGRST202) y se usa el registro anterior.
+    if (error && (error.code === 'PGRST202' || /function .*reservar_franja/i.test(error.message || ''))) {
+        console.warn('Migración 001 pendiente: se usa el registro de reserva anterior.');
+        ({ data, error } = await reservarSinMigracion(franjaId));
     }
-
-    const { data: franja, error: errorFranja } = await supabaseClient
-        .from('franjas')
-        .select('hora_inicio,hora_fin')
-        .eq('id', franjaId)
-        .single();
-
-    if (errorFranja || !franja) return alert('No se pudo consultar la franja seleccionada.');
-
-    // Validación en cliente para evitar reservar una franja pasada.
-    const ahora = new Date();
-    const seleccion = new Date(`${fecha}T${franja.hora_inicio}`);
-    if (seleccion < ahora) return alert('No se puede reservar una franja que ya pasó.');
-
-    const { data: existentes, error: errorExistentes } = await supabaseClient
-        .from('reservas')
-        .select('id')
-        .eq('franja_id', franjaId)
-        .eq('estado', 'activa')
-        .limit(1);
-
-    if (errorExistentes) return alert('No se pudo comprobar la disponibilidad.');
-    if (existentes && existentes.length) {
-        await cargarFranjasDisponibles();
-        return alert('Esa franja acaba de ser reservada por otra persona. Selecciona otra.');
-    }
-
-    const { error } = await supabaseClient.from('reservas').insert([{
-        franja_id: franjaId,
-        recurso_id: equipId,
-        usuario_id: usuario.id,
-        fecha: fecha,
-        hora_inicio: franja.hora_inicio,
-        hora_fin: franja.hora_fin,
-        estado: 'activa',
-        creada_en: new Date().toISOString()
-    }]);
 
     if (error) {
         console.error(error);
-        return alert('Error registrando la reserva: ' + error.message);
+        await cargarFranjasDisponibles();
+        return alert(error.message || 'No se pudo registrar la reserva. Intenta de nuevo.');
     }
 
+    const r = data[0];
     closeModal('reserveModal');
-    alert(`Reserva realizada para ${fecha}, ${franja.hora_inicio.slice(0,5)} - ${franja.hora_fin.slice(0,5)}.`);
+    alert(`Reserva realizada para ${r.fecha}, ${r.hora_inicio.slice(0,5)} - ${r.hora_fin.slice(0,5)}.\n` +
+          `Hora tope de devolución: ${String(r.hora_tope).slice(11,16)}.`);
+    cargarDatosSupabase();
+}
+
+// Registro anterior a la migración 001 (solo se usa si la función del servidor no existe).
+async function reservarSinMigracion(franjaId) {
+    const equipId = parseInt(document.getElementById('reserveEquipId').value);
+    const equipo = recursos.find(r => r.id === equipId);
+    const { data: usuario } = await supabaseClient.from('usuarios').select('id').eq('correo', currentUser.email).maybeSingle();
+    if (!usuario) return { error: { message: 'Tu correo no está registrado como usuario del laboratorio.' } };
+
+    const { data: franja } = await supabaseClient.from('franjas').select('fecha,hora_inicio,hora_fin').eq('id', franjaId).single();
+    if (!franja) return { error: { message: 'La franja seleccionada no existe.' } };
+
+    const ahora = fechaHoraBogota();
+    if (franja.fecha < ahora.fecha || (franja.fecha === ahora.fecha && franja.hora_inicio <= ahora.hora))
+        return { error: { message: 'No se puede reservar una franja que ya pasó.' } };
+    if (equipo && franja.hora_inicio >= equipo.hora_tope)
+        return { error: { message: `Esta franja empieza después de la hora tope del equipo (${equipo.hora_tope.slice(0,5)}).` } };
+
+    const { data: ocupada } = await supabaseClient.from('reservas').select('id').eq('franja_id', franjaId).eq('estado', 'activa').limit(1);
+    if (ocupada && ocupada.length) return { error: { message: 'Franja no disponible: otra persona ya la reservó.' } };
+
+    const { error } = await supabaseClient.from('reservas').insert([{
+        franja_id: franjaId, recurso_id: equipId, usuario_id: usuario.id, fecha: franja.fecha,
+        hora_inicio: franja.hora_inicio, hora_fin: franja.hora_fin, estado: 'activa',
+        creada_en: new Date().toISOString()
+    }]);
+    if (error) return { error };
+    return { data: [{ ...franja, hora_tope: `${franja.fecha}T${equipo ? equipo.hora_tope : ''}` }], error: null };
 }
 
 function openModal(id) { document.getElementById(id).style.display = 'flex'; }
