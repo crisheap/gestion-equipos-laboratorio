@@ -132,7 +132,7 @@ async function cargarDatosSupabase() {
 
     const { data, error } = await supabaseClient
         .from('recursos')
-        .select('id,nombre,tipo,ubicacion,capacidad,atributos,activo,hora_tope')
+        .select('*')
         .order('tipo')
         .order('nombre');
 
@@ -158,6 +158,8 @@ async function cargarDatosSupabase() {
 
     recursos = (data || []).map(r => ({
         ...r,
+        // Si la migración 001 aún no se aplicó, la hora tope se lee de los atributos.
+        hora_tope: r.hora_tope || ((r.atributos || '').match(/hora tope (\d{2}:\d{2})/) || [])[1] + ':00',
         estado: r.activo !== 1 ? 'mantenimiento' : (prestados.has(r.id) ? 'prestado' : 'disponible')
     }));
     cargarFiltros();
@@ -372,7 +374,14 @@ async function handleReserve(e) {
 
     // Todas las reglas (usuario registrado, franja futura, franja libre, hora tope)
     // se validan en el servidor dentro de reservar_franja (migración 001).
-    const { data, error } = await supabaseClient.rpc('reservar_franja', { p_franja_id: franjaId });
+    let { data, error } = await supabaseClient.rpc('reservar_franja', { p_franja_id: franjaId });
+
+    // Compatibilidad: mientras la migración 001 no esté aplicada en Supabase,
+    // la función no existe (PGRST202) y se usa el registro anterior.
+    if (error && (error.code === 'PGRST202' || /function .*reservar_franja/i.test(error.message || ''))) {
+        console.warn('Migración 001 pendiente: se usa el registro de reserva anterior.');
+        ({ data, error } = await reservarSinMigracion(franjaId));
+    }
 
     if (error) {
         console.error(error);
@@ -385,6 +394,34 @@ async function handleReserve(e) {
     alert(`Reserva realizada para ${r.fecha}, ${r.hora_inicio.slice(0,5)} - ${r.hora_fin.slice(0,5)}.\n` +
           `Hora tope de devolución: ${String(r.hora_tope).slice(11,16)}.`);
     cargarDatosSupabase();
+}
+
+// Registro anterior a la migración 001 (solo se usa si la función del servidor no existe).
+async function reservarSinMigracion(franjaId) {
+    const equipId = parseInt(document.getElementById('reserveEquipId').value);
+    const equipo = recursos.find(r => r.id === equipId);
+    const { data: usuario } = await supabaseClient.from('usuarios').select('id').eq('correo', currentUser.email).maybeSingle();
+    if (!usuario) return { error: { message: 'Tu correo no está registrado como usuario del laboratorio.' } };
+
+    const { data: franja } = await supabaseClient.from('franjas').select('fecha,hora_inicio,hora_fin').eq('id', franjaId).single();
+    if (!franja) return { error: { message: 'La franja seleccionada no existe.' } };
+
+    const ahora = fechaHoraBogota();
+    if (franja.fecha < ahora.fecha || (franja.fecha === ahora.fecha && franja.hora_inicio <= ahora.hora))
+        return { error: { message: 'No se puede reservar una franja que ya pasó.' } };
+    if (equipo && franja.hora_inicio >= equipo.hora_tope)
+        return { error: { message: `Esta franja empieza después de la hora tope del equipo (${equipo.hora_tope.slice(0,5)}).` } };
+
+    const { data: ocupada } = await supabaseClient.from('reservas').select('id').eq('franja_id', franjaId).eq('estado', 'activa').limit(1);
+    if (ocupada && ocupada.length) return { error: { message: 'Franja no disponible: otra persona ya la reservó.' } };
+
+    const { error } = await supabaseClient.from('reservas').insert([{
+        franja_id: franjaId, recurso_id: equipId, usuario_id: usuario.id, fecha: franja.fecha,
+        hora_inicio: franja.hora_inicio, hora_fin: franja.hora_fin, estado: 'activa',
+        creada_en: new Date().toISOString()
+    }]);
+    if (error) return { error };
+    return { data: [{ ...franja, hora_tope: `${franja.fecha}T${equipo ? equipo.hora_tope : ''}` }], error: null };
 }
 
 function openModal(id) { document.getElementById(id).style.display = 'flex'; }
