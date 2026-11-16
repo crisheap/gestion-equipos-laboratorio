@@ -30,6 +30,12 @@
   status = 404
   force = true
 
+[[redirects]]
+  from = "/base_de_datos/*"
+  to = "/proyecto.html"
+  status = 404
+  force = true
+
 [[headers]]
   for = "/*"
   [headers.values]
