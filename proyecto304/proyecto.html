@@ -37,6 +37,20 @@
         .form-group label { display:block; margin-bottom:5px; font-weight:600; }
         .close-btn { background:none; border:none; font-size:1.5rem; float:right; cursor:pointer; }
         .empty { grid-column:1/-1; text-align:center; padding:30px; color:#666; background:white; border-radius:8px; }
+        .check-group { display:flex; gap:8px; align-items:flex-start; margin-bottom:15px; }
+        .check-group input { margin-top:5px; }
+        .loans { max-width:1200px; margin:0 auto 25px; padding:0 10px; display:none; }
+        .loans-card { background:white; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.1); border-top:5px solid var(--success); padding:15px; }
+        .loans-head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+        .loans-head select { padding:8px; border:1px solid #ccc; border-radius:4px; background:white; }
+        .loan-item { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-bottom:1px dashed #ddd; flex-wrap:wrap; }
+        .loan-item:last-child { border-bottom:none; }
+        .loan-info { flex:1 1 260px; }
+        .loan-note { color:#666; font-size:.85rem; }
+        .status-vencida, .status-fuera { background:#f8d7da; color:#721c24; }
+        .status-activa { background:#cce5ff; color:#004085; }
+        .status-atiempo { background:#d4edda; color:#155724; }
+        .status-anulada, .status-cancelada { background:#e2e3e5; color:#383d41; }
         @media(max-width:700px){ .filters{grid-template-columns:1fr;} header{padding:1rem; flex-direction:column; align-items:flex-start;} }
     </style>
 </head>
@@ -49,6 +63,19 @@
 <div class="alert-info">
     <strong>Vista Pública:</strong> Consulta los equipos disponibles. Para apartar un equipo, inicia sesión con tu correo <code>@uan.edu.co</code>.
 </div>
+
+<section class="loans" id="loansSection">
+    <div class="loans-card">
+        <div class="loans-head">
+            <h2>Mis préstamos</h2>
+            <select id="loansFilter">
+                <option value="pendientes">Pendientes de devolver</option>
+                <option value="todos">Todos</option>
+            </select>
+        </div>
+        <div id="loansList"></div>
+    </div>
+</section>
 
 <div class="filters">
     <input type="search" id="searchInput" placeholder="Buscar equipo por nombre, tipo o ubicación...">
@@ -98,6 +125,12 @@
             <div class="form-group"><label>Fecha</label><input type="date" id="reserveDate" required></div>
             <div class="form-group"><label>Franja horaria</label><select id="reserveSlot" required><option value="">Selecciona primero una fecha</option></select>
                 <div class="hint" id="reserveTope"></div></div>
+            <div class="check-group">
+                <input type="checkbox" id="reserveTwoWeeks">
+                <label for="reserveTwoWeeks">Reservar también la semana siguiente (mismo día y horario)
+                    <div class="hint">Si no devuelves el equipo a tiempo la primera semana, la reserva de la segunda se anula automáticamente.</div>
+                </label>
+            </div>
             <button type="submit" class="btn btn-success" style="width:100%;">Confirmar Reserva</button>
         </form>
     </div>
@@ -115,6 +148,7 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
     currentUser = session ? session.user : null;
     updateAuthUI();
     cargarDatosSupabase();
+    cargarMisPrestamos();
 });
 
 document.getElementById('searchInput').addEventListener('input', aplicarFiltros);
@@ -122,6 +156,7 @@ document.getElementById('typeFilter').addEventListener('change', aplicarFiltros)
 document.getElementById('locationFilter').addEventListener('change', aplicarFiltros);
 document.getElementById('statusFilter').addEventListener('change', aplicarFiltros);
 document.getElementById('reserveDate').addEventListener('change', cargarFranjasDisponibles);
+document.getElementById('loansFilter').addEventListener('change', cargarMisPrestamos);
 
 function escaparHTML(texto) {
     return String(texto ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
@@ -307,6 +342,7 @@ function requestReserve(equipId) {
     inputFecha.min = fecha;
     inputFecha.value = fecha;
 
+    document.getElementById('reserveTwoWeeks').checked = false;
     cargarFranjasDisponibles();
     openModal('reserveModal');
 }
@@ -373,15 +409,12 @@ async function handleReserve(e) {
     if (!franjaId) return alert('Selecciona una franja disponible.');
 
     // Todas las reglas (usuario registrado, franja futura, franja libre, hora tope)
-    // se validan en el servidor dentro de reservar_franja (migración 001).
-    let { data, error } = await supabaseClient.rpc('reservar_franja', { p_franja_id: franjaId });
-
-    // Compatibilidad: mientras la migración 001 no esté aplicada en Supabase,
-    // la función no existe (PGRST202) y se usa el registro anterior.
-    if (error && (error.code === 'PGRST202' || /function .*reservar_franja/i.test(error.message || ''))) {
-        console.warn('Migración 001 pendiente: se usa el registro de reserva anterior.');
-        ({ data, error } = await reservarSinMigracion(franjaId));
-    }
+    // se validan en el servidor: reservar_franja (HU-04) y
+    // crear_reserva_dos_semanas (CR-01, que reutiliza reservar_franja).
+    const dosSemanas = document.getElementById('reserveTwoWeeks').checked;
+    const { data, error } = dosSemanas
+        ? await supabaseClient.rpc('crear_reserva_dos_semanas', { p_franja_id: franjaId })
+        : await supabaseClient.rpc('reservar_franja', { p_franja_id: franjaId });
 
     if (error) {
         console.error(error);
@@ -389,39 +422,113 @@ async function handleReserve(e) {
         return alert(error.message || 'No se pudo registrar la reserva. Intenta de nuevo.');
     }
 
-    const r = data[0];
     closeModal('reserveModal');
-    alert(`Reserva realizada para ${r.fecha}, ${r.hora_inicio.slice(0,5)} - ${r.hora_fin.slice(0,5)}.\n` +
-          `Hora tope de devolución: ${String(r.hora_tope).slice(11,16)}.`);
+    if (dosSemanas) {
+        // El servidor explica si se reservaron las dos semanas o solo la primera.
+        alert(data.mensaje);
+    } else {
+        const r = data[0];
+        alert(`Reserva realizada para ${formatoFecha(r.fecha)}, ${r.hora_inicio.slice(0,5)} - ${r.hora_fin.slice(0,5)}.\n` +
+              `Hora tope de devolución: ${String(r.hora_tope).slice(11,16)}.`);
+    }
     cargarDatosSupabase();
+    cargarMisPrestamos();
 }
 
-// Registro anterior a la migración 001 (solo se usa si la función del servidor no existe).
-async function reservarSinMigracion(franjaId) {
-    const equipId = parseInt(document.getElementById('reserveEquipId').value);
-    const equipo = recursos.find(r => r.id === equipId);
-    const { data: usuario } = await supabaseClient.from('usuarios').select('id').eq('correo', currentUser.email).maybeSingle();
-    if (!usuario) return { error: { message: 'Tu correo no está registrado como usuario del laboratorio.' } };
+// ---------------------------------------------------------------------
+// HU-05 · Registro de devolución y HU-06 · resultado frente a la hora tope
+// ---------------------------------------------------------------------
+// v_prestamos usa la seguridad de quien consulta: con RLS sobre usuarios,
+// cada persona solo ve sus propios préstamos.
+const ESTADOS_PRESTAMO = {
+    activa:     { texto: 'Pendiente de devolver', clase: 'status-activa' },
+    vencida:    { texto: 'Vencido: sin devolver tras la hora tope', clase: 'status-vencida' },
+    a_tiempo:   { texto: 'Devuelto a tiempo', clase: 'status-atiempo' },
+    fuera_de_tiempo: { texto: 'Devuelto fuera de tiempo', clase: 'status-fuera' },
+    completada: { texto: 'Devuelto', clase: 'status-atiempo' },
+    anulada:    { texto: 'Anulada', clase: 'status-anulada' },
+    cancelada:  { texto: 'Cancelada', clase: 'status-cancelada' }
+};
 
-    const { data: franja } = await supabaseClient.from('franjas').select('fecha,hora_inicio,hora_fin').eq('id', franjaId).single();
-    if (!franja) return { error: { message: 'La franja seleccionada no existe.' } };
+function formatoFecha(iso) {
+    const [a, m, d] = String(iso).slice(0, 10).split('-');
+    return `${d}/${m}/${a}`;
+}
+
+function estadoPrestamo(p) {
+    if (p.estado === 'completada' && p.resultado_devolucion) return ESTADOS_PRESTAMO[p.resultado_devolucion];
+    return ESTADOS_PRESTAMO[p.estado_calculado] || { texto: p.estado_calculado, clase: 'status-resumen' };
+}
+
+async function cargarMisPrestamos() {
+    const seccion = document.getElementById('loansSection');
+    const lista = document.getElementById('loansList');
+    if (!currentUser) { seccion.style.display = 'none'; return; }
+    seccion.style.display = 'block';
+    lista.innerHTML = '<p class="loan-note">Cargando...</p>';
+
+    const filtro = document.getElementById('loansFilter').value;
+    let consulta = supabaseClient.from('v_prestamos').select('*')
+        .order('fecha', { ascending: filtro === 'pendientes' })
+        .order('hora_inicio', { ascending: filtro === 'pendientes' })
+        .limit(50);
+    if (filtro === 'pendientes') consulta = consulta.eq('estado', 'activa');
+
+    const { data, error } = await consulta;
+    if (error) {
+        console.error(error);
+        lista.innerHTML = '<p class="loan-note">No se pudieron cargar tus préstamos.</p>';
+        return;
+    }
+    if (!data.length) {
+        lista.innerHTML = `<p class="loan-note">${filtro === 'pendientes'
+            ? 'No tienes préstamos pendientes de devolver.'
+            : 'Aún no tienes préstamos. Si tu correo no está registrado como usuario del laboratorio, pide que lo agreguen.'}</p>`;
+        return;
+    }
 
     const ahora = fechaHoraBogota();
-    if (franja.fecha < ahora.fecha || (franja.fecha === ahora.fecha && franja.hora_inicio <= ahora.hora))
-        return { error: { message: 'No se puede reservar una franja que ya pasó.' } };
-    if (equipo && franja.hora_inicio >= equipo.hora_tope)
-        return { error: { message: `Esta franja empieza después de la hora tope del equipo (${equipo.hora_tope.slice(0,5)}).` } };
+    lista.innerHTML = data.map(p => {
+        const est = estadoPrestamo(p);
+        const yaEmpezo = p.fecha < ahora.fecha || (p.fecha === ahora.fecha && p.hora_inicio <= ahora.hora);
+        const puedeDevolver = p.estado === 'activa' && yaEmpezo;
+        const notas = [];
+        notas.push(`Devolver antes de las ${String(p.hora_tope).slice(11,16)} del ${formatoFecha(p.hora_tope)}`);
+        if (p.reserva_origen_id) notas.push(`Segunda semana de la reserva #${p.reserva_origen_id}`);
+        if (p.devuelta_en) notas.push(`Devuelto el ${formatoFecha(p.devuelta_en)} a las ${String(p.devuelta_en).slice(11,16)}`);
+        if (p.motivo_anulacion) notas.push(p.motivo_anulacion);
+        return `
+            <div class="loan-item">
+                <div class="loan-info">
+                    <strong>#${p.id} · ${escaparHTML(p.equipo)}</strong>
+                    <div class="equipment-meta">${formatoFecha(p.fecha)} · ${p.hora_inicio.slice(0,5)} - ${p.hora_fin.slice(0,5)}</div>
+                    ${notas.map(n => `<div class="loan-note">${escaparHTML(n)}</div>`).join('')}
+                </div>
+                <span class="status-badge ${est.clase}">${escaparHTML(est.texto)}</span>
+                ${p.estado === 'activa'
+                    ? `<button class="btn btn-success" ${puedeDevolver ? '' : 'disabled title="La franja aún no empieza"'} onclick="registrarDevolucion(${p.id})">Registrar devolución</button>`
+                    : ''}
+            </div>`;
+    }).join('');
+}
 
-    const { data: ocupada } = await supabaseClient.from('reservas').select('id').eq('franja_id', franjaId).eq('estado', 'activa').limit(1);
-    if (ocupada && ocupada.length) return { error: { message: 'Franja no disponible: otra persona ya la reservó.' } };
+async function registrarDevolucion(reservaId) {
+    if (!confirm(`¿Registrar ahora la devolución del préstamo #${reservaId}?`)) return;
 
-    const { error } = await supabaseClient.from('reservas').insert([{
-        franja_id: franjaId, recurso_id: equipId, usuario_id: usuario.id, fecha: franja.fecha,
-        hora_inicio: franja.hora_inicio, hora_fin: franja.hora_fin, estado: 'activa',
-        creada_en: new Date().toISOString()
-    }]);
-    if (error) return { error };
-    return { data: [{ ...franja, hora_tope: `${franja.fecha}T${equipo ? equipo.hora_tope : ''}` }], error: null };
+    // El servidor guarda la hora real (Bogotá) y la compara con la hora tope.
+    const { data, error } = await supabaseClient.rpc('registrar_devolucion', { p_reserva_id: reservaId });
+    if (error) {
+        console.error(error);
+        return alert(error.message || 'No se pudo registrar la devolución.');
+    }
+
+    const r = data[0];
+    alert(r.resultado === 'a_tiempo'
+        ? `Devolución registrada a tiempo (límite: ${String(r.limite).slice(11,16)}).`
+        : `Devolución registrada FUERA DE TIEMPO (límite: ${String(r.limite).slice(11,16)}).\n` +
+          'Si este préstamo tenía reserva para la semana siguiente, esa reserva se anuló.');
+    cargarDatosSupabase();
+    cargarMisPrestamos();
 }
 
 function openModal(id) { document.getElementById(id).style.display = 'flex'; }
@@ -432,6 +539,7 @@ window.onload = async () => {
     currentUser = session ? session.user : null;
     updateAuthUI();
     cargarDatosSupabase();
+    cargarMisPrestamos();
 };
 </script>
 </body>
