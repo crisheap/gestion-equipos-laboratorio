@@ -39,7 +39,8 @@ Equipo **Error 404** · Gestión de Proyectos de Software · UAN Sede Sur, Bogot
 - **Búsqueda y filtros:** por nombre, tipo, ubicación y estado.
 - **Disponibilidad:** solo se ofrecen las franjas libres, futuras y que empiezan antes de la hora tope del equipo.
 - **Préstamo:** queda asociado a quien inicia sesión con su correo `@uan.edu.co`, con fecha, franja y **hora tope guardada**.
-- **En construcción (Sprint 3):** registro de devoluciones, clasificación *Devuelto a tiempo* / *Fuera de tiempo*, reserva de dos semanas, y consulta y cancelación de préstamos.
+- **Reserva de dos semanas (CR-01):** casilla «Reservar también la semana siguiente». Si la segunda semana está ocupada o es festivo, solo se reserva la primera; si el equipo no se devuelve a tiempo la primera semana, la segunda se anula sola.
+- **Mis préstamos y devolución:** cada usuario ve sus préstamos con su estado (*Pendiente*, *Vencido*, *Devuelto a tiempo*, *Devuelto fuera de tiempo*, *Anulada*) y registra la devolución.
 
 > Capturas tomadas con los datos semilla del profesor.
 
@@ -53,9 +54,11 @@ Backlog en Jira (proyecto **SCRUM**): 7 historias de usuario en 5 épicas, 47 st
 | HU-02 | Búsqueda y filtros | 5 | 1 | ✅ Terminada |
 | HU-03 | Consulta de disponibilidad | 3 | 2 | ✅ Terminada |
 | HU-04 | Registro de préstamo | 13 | 2 | ✅ Terminada |
-| HU-05 | Registro de devolución | 8 | 3 | 🔄 En curso · meta 21 nov |
-| HU-06 | Validación de la hora tope y reserva de dos semanas | 8 | 3 | 🔄 En curso · meta 25 nov |
-| HU-07 | Consulta y cancelación de préstamos | 5 | 3 | 🔄 En curso · meta 27 nov |
+| HU-05 | Registro de devolución | 8 | 3 | 🧪 Servidor terminado e interfaz publicada; en pruebas con sesión |
+| HU-06 | Validación de la hora tope y reserva de dos semanas | 8 | 3 | 🧪 Servidor terminado e interfaz publicada; en pruebas con sesión |
+| HU-07 | Consulta y cancelación de préstamos | 5 | — | ⏸ Backlog de producto (salió del Sprint 3 por el CR-01, CC-10) |
+
+Estado al 17 nov de 2026. El detalle está en la sección 12.6 del [documento de gestión V4.3](docs/ERROR404_Documento_de_gestion_Corte4_V4.3.pdf).
 
 **Deuda técnica del Sprint 2, pagada el 11 nov:** validación de reservas en el servidor y hora tope guardada (DT-01), estado del equipo y filtro por estado (DT-02), y trazabilidad entre GitHub y Jira (DT-03).
 
@@ -65,17 +68,18 @@ Backlog en Jira (proyecto **SCRUM**): 7 historias de usuario en 5 épicas, 47 st
 flowchart LR
     U([Estudiante o docente]) -->|navegador| W["proyecto.html<br/>HTML5 · CSS3 · JavaScript<br/>(Netlify)"]
     W -->|consultas de lectura| R[(Supabase · PostgreSQL)]
-    W -->|"rpc reservar_franja()"| F["Función del servidor<br/>valida y registra"]
+    W -->|"rpc reservar_franja()<br/>crear_reserva_dos_semanas()<br/>registrar_devolucion()"| F["Funciones del servidor<br/>validan y registran"]
     F --> R
     W -->|inicio de sesión| A[Supabase Auth]
     R -.->|"RLS: solo lectura<br/>desde el navegador"| W
+    C["pg_cron cada 10 min<br/>anula la 2.ª semana si<br/>no se devolvió a tiempo"] --> R
 ```
 
 | Capa | Tecnología | Para qué |
 | --- | --- | --- |
 | Interfaz | HTML5, CSS3 y JavaScript en un solo archivo | Catálogo, filtros, disponibilidad y reserva |
 | Datos | Supabase (PostgreSQL) | Equipos, usuarios, franjas y reservas |
-| Lógica de servidor | Función `reservar_franja()`, índice único y políticas RLS | Reglas de negocio que no dependen del navegador |
+| Lógica de servidor | Funciones `reservar_franja()`, `crear_reserva_dos_semanas()` y `registrar_devolucion()`, índice único, políticas RLS y tarea `pg_cron` | Reglas de negocio que no dependen del navegador |
 | Identificación | Supabase Auth | Saber quién solicita el préstamo |
 | Publicación | Netlify | URL pública para revisión y demostración |
 | Gestión | Jira (SCRUM) · Git y GitHub | Backlog, sprints, revisión cruzada |
@@ -91,24 +95,35 @@ flowchart LR
 | La hora tope del equipo queda guardada en cada préstamo | `recursos.hora_tope` → `reservas.hora_tope` | CA04 |
 | No se reserva una franja que empieza en la hora tope del equipo o después | `reservar_franja()` | Regla propia |
 | El navegador no puede escribir directamente en las tablas | RLS sin políticas de escritura | 18 |
+| Reserva de dos semanas: la segunda solo si su franja existe y está libre | `crear_reserva_dos_semanas()` | CR-01 |
+| La devolución se compara con la hora tope y queda *a tiempo* o *fuera de tiempo* | `registrar_devolucion()` | HU-05, HU-06 |
+| Si la primera semana no se devuelve a tiempo, la segunda se anula y la franja queda libre | Disparador + `pg_cron` cada 10 min | CR-01 |
 
-Las cinco reglas tienen prueba automática en [`proyecto304/pruebas/pruebas_reglas_servidor.sql`](proyecto304/pruebas/pruebas_reglas_servidor.sql).
+Todas las reglas tienen prueba automática en [`proyecto304/base_de_datos/pruebas/`](proyecto304/base_de_datos/pruebas/): 5/5, 9/9 y 9/9 con usuario real (17 nov).
 
 ## Puesta en marcha
 
 ### 1. Base de datos (Supabase → SQL Editor)
 
+Proyecto de Supabase en uso: **`gestion-equipos-laboratorio-uan`** (desde el 15 nov de 2026, CC-11). Los scripts están en [`proyecto304/base_de_datos/`](proyecto304/base_de_datos/); su [README](proyecto304/base_de_datos/README.md) tiene el detalle.
+
 | Paso | Archivo | Nota |
 | :---: | --- | --- |
-| 1 | [`supabase_setup_profesor.sql`](proyecto304/supabase_setup_profesor.sql) | Tablas y datos semilla: 15 equipos, 40 usuarios, 1.800 franjas, 216 reservas. **Borra las tablas si ya existen.** |
-| 2 | [`migraciones/001_validaciones_servidor_hora_tope.sql`](proyecto304/migraciones/001_validaciones_servidor_hora_tope.sql) | Reglas de servidor, hora tope y franjas del 5 oct al 11 dic de 2026. No borra datos; se puede ejecutar más de una vez. |
-| 3 | [`pruebas/pruebas_reglas_servidor.sql`](proyecto304/pruebas/pruebas_reglas_servidor.sql) | Debe mostrar 5 filas `OK`. No deja datos de prueba. |
+| 0 | `00_diagnostico.sql` | Solo lectura. Dice en qué estado está la base y qué scripts faltan. |
+| 1–3 | `01_esquema_profesor.sql`, `02_datos_profesor.sql`, `03_datos_complemento_profesor.sql` | Datos oficiales del profesor: 15 equipos, 40 usuarios, 7.110 franjas hasta el 31 dic y 570 reservas. **El 01 borra las tablas si ya existen.** |
+| 4 | `04_validaciones_servidor_hora_tope.sql` | Hora tope, `reservar_franja()`, índices y RLS. |
+| 5 | `05_devoluciones_y_reserva_dos_semanas.sql` | Devolución, reserva de dos semanas y anulación automática. Requiere la extensión `pg_cron`. |
+| 6 | `06_verificacion.sql` | Solo lectura. Todos los valores deben coincidir con lo esperado. |
+| 7 | `07_ajustes_seguridad_rendimiento.sql` | Ajustes de los avisos de seguridad de Supabase. |
+| — | `pruebas/*.sql` | 5/5, 9/9 y 9/9. Se deshacen solas: no dejan datos. |
 
-> Mientras no se ejecute el paso 2, la página sigue funcionando en un modo de compatibilidad (validación en el navegador). Con la migración aplicada, solo queda la validación del servidor.
+> `supabase_setup_profesor.sql` y `migraciones/001_...sql` quedan solo como historial: el primero no trae el complemento del profesor y la segunda generaba franjas propias que chocan con las oficiales. **No ejecutarlos.**
 
 ### 2. Autenticación
 
-En **Authentication → Providers**, habilitar *Email*. Solo pueden reservar las cuentas cuyo correo exista en la tabla `usuarios`.
+En **Authentication → Providers**, habilitar *Email* y dejar activa la confirmación de correo. En **URL Configuration**, *Site URL* `https://gestion-equipos-laboratorio-uan.netlify.app` y redirección `https://gestion-equipos-laboratorio-uan.netlify.app/**`.
+
+Solo pueden reservar las cuentas cuyo correo exista en la tabla `usuarios`. Los 40 correos del profesor no reciben correos, así que para demostrar se usan las cuentas reales del equipo; hoy está dada de alta la del PO (CC-13, riesgo R-10).
 
 ### 3. Publicación
 
@@ -123,15 +138,14 @@ En **Authentication → Providers**, habilitar *Email*. Solo pueden reservar las
 gestion-equipos-laboratorio/
 ├── proyecto304/
 │   ├── proyecto.html                          Aplicación web
-│   ├── supabase_setup_profesor.sql            Esquema y datos del profesor
-│   ├── migraciones/
-│   │   └── 001_validaciones_servidor_hora_tope.sql
-│   └── pruebas/
-│       └── pruebas_reglas_servidor.sql
+│   ├── base_de_datos/                         Base vigente: scripts 00 a 07, pruebas y reparación
+│   ├── supabase_setup_profesor.sql            Historial (no usar)
+│   ├── migraciones/001_...sql                 Historial (no usar)
+│   └── pruebas/pruebas_reglas_servidor.sql    Historial; la vigente está en base_de_datos/pruebas
 └── docs/
-    ├── ERROR404_Documento_de_gestion_Corte3_V4.1.docx   Charter, DoD, riesgos, sprints y deuda técnica
-    ├── img/                                           Capturas
-    └── historico/                                     Charter y DoD del Corte 1
+    ├── ERROR404_Documento_de_gestion_Corte4_V4.3.docx/.pdf   Documento de gestión vigente (17 nov)
+    ├── img/                                                   Capturas
+    └── historico/                                             Charter, DoD y versiones anteriores
 ```
 
 ## Forma de trabajo
