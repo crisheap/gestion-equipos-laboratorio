@@ -12,6 +12,7 @@ Base oficial entregada por el profesor (repositorio `jsricop/bd-reservas-error40
 | `03_datos_complemento_profesor.sql` | 5.310 franjas y 354 reservas del 5 oct al 31 dic, sin fines de semana ni festivos. | Profesor (9 oct 2026), sin cambios |
 | `04_validaciones_servidor_hora_tope.sql` | Hora tope por equipo, función `reservar_franja`, índices anti doble reserva y RLS. | Equipo (migración 001 sin generar franjas) |
 | `05_devoluciones_y_reserva_dos_semanas.sql` | HU-05/HU-06 (`registrar_devolucion`) y CR-01 (`crear_reserva_dos_semanas`, anulación automática). | Equipo |
+| `07_ajustes_seguridad_rendimiento.sql` | Corrige los avisos de Supabase: `search_path` fijo, funciones internas fuera de la API, política de usuarios optimizada e índice en `reservas.recurso_id`. | Equipo (17 nov) |
 | `06_verificacion.sql` | Solo lectura. Compara la base con los valores esperados. | Equipo |
 | `pruebas/` | Pruebas en transacción que se deshace: no dejan datos. | Equipo |
 | `reparacion/` | Solo si ya se había aplicado la migración 001 original. | Equipo |
@@ -76,3 +77,9 @@ Proyecto `gestion-equipos-laboratorio-uan` (`https://gnhneqorycwupbookpzu.supaba
 - API pública: lee equipos, franjas y reservas; no muestra usuarios; sin sesión no se puede reservar.
 - Auth: Site URL `https://gestion-equipos-laboratorio-uan.netlify.app` y redirección `https://gestion-equipos-laboratorio-uan.netlify.app/**`.
 - `proyecto.html` apunta al proyecto nuevo (URL y clave publicable).
+
+## Actualización 17 nov 2026
+
+- Aplicado `07_ajustes_seguridad_rendimiento.sql` en Supabase. Quedan solo dos avisos: las tres funciones que usa la aplicación (`reservar_franja`, `registrar_devolucion`, `crear_reserva_dos_semanas`), que son intencionales, y la protección contra contraseñas filtradas de Auth.
+- `pruebas/pruebas_integracion_usuario_real.sql` con el usuario real `cherrera31@uan.edu.co`: 9/9 OK (SCRUM-44, 50 y 59), sin datos sobrantes.
+- `pg_cron`: 190 ejecuciones correctas de `anular-reservas-incumplidas` al 17 nov.
