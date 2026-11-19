@@ -112,6 +112,19 @@
             <div class="form-group"><label>Contraseña</label><input type="password" id="loginPass" required></div>
             <button type="submit" class="btn btn-primary" style="width:100%;">Ingresar</button>
         </form>
+        <p class="hint" style="text-align:center; margin-top:12px;"><a href="#" onclick="olvideContrasena(event)">¿Olvidaste tu contraseña?</a></p>
+    </div>
+</div>
+
+<div class="modal" id="newPassModal">
+    <div class="modal-content">
+        <button class="close-btn" onclick="closeModal('newPassModal')">&times;</button>
+        <h2>Nueva contraseña</h2>
+        <form onsubmit="handleNewPassword(event)">
+            <div class="form-group"><label>Nueva contraseña</label><input type="password" id="newPass" required minlength="6"></div>
+            <div class="form-group"><label>Repite la contraseña</label><input type="password" id="newPass2" required minlength="6"></div>
+            <button type="submit" class="btn btn-success" style="width:100%;">Guardar contraseña</button>
+        </form>
     </div>
 </div>
 
@@ -140,12 +153,15 @@
 const SUPABASE_URL = 'https://gnhneqorycwupbookpzu.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_p0WLRqYGT7mkDhztjlJMtQ_mYikITzG';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const URL_DE_LA_PAGINA = window.location.origin + window.location.pathname;
 
 let currentUser = null;
 let recursos = [];
 
 supabaseClient.auth.onAuthStateChange((event, session) => {
     currentUser = session ? session.user : null;
+    // El enlace del correo de recuperación abre la página con una sesión temporal.
+    if (event === 'PASSWORD_RECOVERY') openModal('newPassModal');
     updateAuthUI();
     cargarDatosSupabase();
     cargarMisPrestamos();
@@ -296,11 +312,42 @@ async function handleRegister(e) {
 
     if (!validarCorreoUAN(email)) return alert('Solo se permiten correos @uan.edu.co');
 
-    const { error } = await supabaseClient.auth.signUp({ email, password });
+    const { data, error } = await supabaseClient.auth.signUp({
+        email, password, options: { emailRedirectTo: URL_DE_LA_PAGINA }
+    });
     if (error) return alert('Error: ' + error.message);
 
-    alert('Registro exitoso. Si Supabase solicita confirmación, revisa tu correo.');
+    // Con la confirmación de correo activa, Supabase no avisa con un error si el correo
+    // ya existe: devuelve el usuario sin identidades y no envía ningún mensaje.
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        return alert('Este correo ya está registrado. Usa «Iniciar Sesión»; si no recuerdas la contraseña, usa «¿Olvidaste tu contraseña?».');
+    }
+    alert('Registro exitoso. Revisa tu correo y abre el enlace de confirmación para activar la cuenta.');
     closeModal('registerModal');
+}
+
+async function olvideContrasena(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    if (!email) return alert('Escribe primero tu correo institucional en el campo «Correo Institucional».');
+    if (!validarCorreoUAN(email)) return alert('Solo se permiten correos @uan.edu.co');
+
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: URL_DE_LA_PAGINA });
+    if (error) return alert('No se pudo enviar el correo: ' + error.message);
+    alert(`Si ${email} está registrado, te llegará un correo con un enlace para crear una contraseña nueva. ` +
+          'Ábrelo en este mismo navegador. Revisa también la carpeta de correo no deseado.');
+    closeModal('loginModal');
+}
+
+async function handleNewPassword(e) {
+    e.preventDefault();
+    const password = document.getElementById('newPass').value;
+    if (password !== document.getElementById('newPass2').value) return alert('Las contraseñas no coinciden.');
+
+    const { error } = await supabaseClient.auth.updateUser({ password });
+    if (error) return alert('No se pudo guardar la contraseña: ' + error.message);
+    alert('Contraseña actualizada. Ya tienes la sesión iniciada.');
+    closeModal('newPassModal');
 }
 
 async function handleLogin(e) {
@@ -311,7 +358,13 @@ async function handleLogin(e) {
     if (!validarCorreoUAN(email)) return alert('Solo se permiten correos @uan.edu.co');
 
     const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) return alert('Error: ' + error.message);
+    if (error) {
+        if (/invalid login credentials/i.test(error.message))
+            return alert('Correo o contraseña incorrectos. Si no recuerdas la contraseña, usa «¿Olvidaste tu contraseña?».');
+        if (/email not confirmed/i.test(error.message))
+            return alert('Tu correo aún no está confirmado. Abre el enlace que te llegó al registrarte.');
+        return alert('Error: ' + error.message);
+    }
     closeModal('loginModal');
 }
 
