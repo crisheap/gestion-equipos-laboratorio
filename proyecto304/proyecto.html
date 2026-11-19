@@ -150,10 +150,13 @@
 </div>
 
 <script>
+// Se lee antes de crear el cliente de Supabase, que limpia la URL al iniciar.
+const URL_INICIAL = { hash: window.location.hash.slice(1), query: window.location.search.slice(1) };
 const SUPABASE_URL = 'https://gnhneqorycwupbookpzu.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_p0WLRqYGT7mkDhztjlJMtQ_mYikITzG';
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const URL_DE_LA_PAGINA = window.location.origin + window.location.pathname;
+setTimeout(avisarErrorDeEnlace, 300);
 
 let currentUser = null;
 let recursos = [];
@@ -333,10 +336,26 @@ async function olvideContrasena(e) {
     if (!validarCorreoUAN(email)) return alert('Solo se permiten correos @uan.edu.co');
 
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: URL_DE_LA_PAGINA });
-    if (error) return alert('No se pudo enviar el correo: ' + error.message);
+    if (error) {
+        if (/rate limit|security purposes/i.test(error.message))
+            return alert('Ya se envió un correo hace poco. Espera unos minutos antes de pedir otro.');
+        return alert('No se pudo enviar el correo: ' + error.message);
+    }
     alert(`Si ${email} está registrado, te llegará un correo con un enlace para crear una contraseña nueva. ` +
           'Ábrelo en este mismo navegador. Revisa también la carpeta de correo no deseado.');
     closeModal('loginModal');
+}
+
+// Un enlace de correo vencido o ya usado vuelve a la página con el error en la URL.
+function avisarErrorDeEnlace() {
+    const datos = new URLSearchParams(URL_INICIAL.hash || URL_INICIAL.query);
+    const codigo = datos.get('error_code');
+    if (!codigo && !datos.get('error')) return;
+    history.replaceState(null, '', URL_DE_LA_PAGINA);
+    alert(codigo === 'otp_expired'
+        ? 'El enlace del correo ya fue usado o venció. Si era para confirmar tu registro, tu cuenta ya puede estar activa: intenta «Iniciar Sesión». ' +
+          'Si era para recuperar la contraseña, el filtro de seguridad del correo pudo abrirlo antes que tú: avisa al equipo del proyecto.'
+        : 'No se pudo completar la acción del enlace: ' + (datos.get('error_description') || codigo || 'error desconocido'));
 }
 
 async function handleNewPassword(e) {
