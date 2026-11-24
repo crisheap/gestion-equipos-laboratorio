@@ -54,11 +54,11 @@ Backlog en Jira (proyecto **SCRUM**): 7 historias de usuario en 5 épicas, 47 st
 | HU-02 | Búsqueda y filtros | 5 | 1 | ✅ Terminada |
 | HU-03 | Consulta de disponibilidad | 3 | 2 | ✅ Terminada |
 | HU-04 | Registro de préstamo | 13 | 2 | ✅ Terminada |
-| HU-05 | Registro de devolución | 8 | 3 | 🧪 Servidor terminado e interfaz publicada; en pruebas con sesión |
-| HU-06 | Validación de la hora tope y reserva de dos semanas | 8 | 3 | 🧪 Servidor terminado e interfaz publicada; en pruebas con sesión |
+| HU-05 | Registro de devolución | 8 | 3 | ✅ Finalizado · 23 nov |
+| HU-06 | Validación de la hora tope y reserva de dos semanas | 8 | 3 | ✅ Finalizado · 23 nov |
 | HU-07 | Consulta y cancelación de préstamos | 5 | — | ⏸ Backlog de producto (salió del Sprint 3 por el CR-01, CC-10) |
 
-Estado al 17 nov de 2026. El detalle está en la sección 12.6 del [documento de gestión V4.3](docs/ERROR404_Documento_de_gestion_Corte4_V4.3.pdf).
+Estado al 24 nov de 2026: Sprint 3 cerrado con 16 de 16 SP. El detalle está en las secciones 12.6 a 12.8 del [documento de gestión V4.4](docs/ERROR404_Documento_de_gestion_Corte4_V4.4.pdf).
 
 **Deuda técnica del Sprint 2, pagada el 11 nov:** validación de reservas en el servidor y hora tope guardada (DT-01), estado del equipo y filtro por estado (DT-02), y trazabilidad entre GitHub y Jira (DT-03).
 
@@ -143,7 +143,7 @@ gestion-equipos-laboratorio/
 │   ├── migraciones/001_...sql                 Historial (no usar)
 │   └── pruebas/pruebas_reglas_servidor.sql    Historial; la vigente está en base_de_datos/pruebas
 └── docs/
-    ├── ERROR404_Documento_de_gestion_Corte4_V4.3.docx/.pdf   Documento de gestión vigente (17 nov)
+    ├── ERROR404_Documento_de_gestion_Corte4_V4.4.docx/.pdf   Documento de gestión vigente (24 nov)
     ├── img/                                                   Capturas
     └── historico/                                             Charter, DoD y versiones anteriores
 ```
