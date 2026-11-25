@@ -115,6 +115,7 @@ Proyecto de Supabase en uso: **`gestion-equipos-laboratorio-uan`** (desde el 15 
 | 5 | `05_devoluciones_y_reserva_dos_semanas.sql` | Devolución, reserva de dos semanas y anulación automática. Requiere la extensión `pg_cron`. |
 | 6 | `06_verificacion.sql` | Solo lectura. Todos los valores deben coincidir con lo esperado. |
 | 7 | `07_ajustes_seguridad_rendimiento.sql` | Ajustes de los avisos de seguridad de Supabase. |
+| 8 | `08_acceso_por_lista.sql` | Ingreso por lista desplegable de usuarios (demo educativa). |
 | — | `pruebas/*.sql` | 5/5, 9/9 y 9/9. Se deshacen solas: no dejan datos. |
 
 > `supabase_setup_profesor.sql` y `migraciones/001_...sql` quedan solo como historial: el primero no trae el complemento del profesor y la segunda generaba franjas propias que chocan con las oficiales. **No ejecutarlos.**

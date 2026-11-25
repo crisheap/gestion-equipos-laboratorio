@@ -61,7 +61,7 @@
 </header>
 
 <div class="alert-info">
-    <strong>Vista Pública:</strong> Consulta los equipos disponibles. Para apartar un equipo, inicia sesión con tu correo <code>@uan.edu.co</code>.
+    <strong>Vista Pública:</strong> Consulta los equipos disponibles. Para apartar un equipo, inicia sesión eligiendo tu usuario en la lista.
 </div>
 
 <section class="loans" id="loansSection">
@@ -108,11 +108,10 @@
         <button class="close-btn" onclick="closeModal('loginModal')">&times;</button>
         <h2>Iniciar Sesión</h2>
         <form onsubmit="handleLogin(event)">
-            <div class="form-group"><label>Correo Institucional</label><input type="email" id="loginEmail" required></div>
-            <div class="form-group"><label>Contraseña</label><input type="password" id="loginPass" required></div>
+            <div class="form-group"><label for="loginUsuario">Usuario</label>
+                <select id="loginUsuario" required><option value="">Cargando usuarios…</option></select></div>
             <button type="submit" class="btn btn-primary" style="width:100%;">Ingresar</button>
         </form>
-        <p class="hint" style="text-align:center; margin-top:12px;"><a href="#" onclick="olvideContrasena(event)">¿Olvidaste tu contraseña?</a></p>
     </div>
 </div>
 
@@ -369,21 +368,34 @@ async function handleNewPassword(e) {
     closeModal('newPassModal');
 }
 
+// Acceso por lista (proyecto educativo): cada usuario de la tabla `usuarios` tiene una
+// cuenta con esta misma clave de demostración (base_de_datos/08_acceso_por_lista.sql).
+// La página inicia sesión por debajo, así las reglas del servidor siguen igual.
+const CLAVE_DEMO = 'Demo-x4_7wrQbYezK';
+
+async function cargarListaUsuarios() {
+    const select = document.getElementById('loginUsuario');
+    const { data, error } = await supabaseClient.rpc('listar_usuarios_acceso');
+    if (error) {
+        select.innerHTML = '<option value="">No se pudo cargar la lista</option>';
+        return;
+    }
+    select.innerHTML = '<option value="">Selecciona un usuario…</option>' +
+        data.map(u => `<option value="${escaparHTML(u.correo)}">${escaparHTML(u.nombre)} · ${escaparHTML(u.correo)}</option>`).join('');
+}
+
+function abrirLogin() {
+    openModal('loginModal');
+    cargarListaUsuarios();
+}
+
 async function handleLogin(e) {
     e.preventDefault();
-    const email = document.getElementById('loginEmail').value.trim();
-    const password = document.getElementById('loginPass').value;
+    const email = document.getElementById('loginUsuario').value;
+    if (!email) return alert('Selecciona un usuario de la lista.');
 
-    if (!validarCorreoUAN(email)) return alert('Solo se permiten correos @uan.edu.co');
-
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) {
-        if (/invalid login credentials/i.test(error.message))
-            return alert('Correo o contraseña incorrectos. Si no recuerdas la contraseña, usa «¿Olvidaste tu contraseña?».');
-        if (/email not confirmed/i.test(error.message))
-            return alert('Tu correo aún no está confirmado. Abre el enlace que te llegó al registrarte.');
-        return alert('Error: ' + error.message);
-    }
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password: CLAVE_DEMO });
+    if (error) return alert('No se pudo ingresar con ese usuario: ' + error.message);
     closeModal('loginModal');
 }
 
@@ -394,12 +406,11 @@ async function handleLogout() {
 function updateAuthUI() {
     document.getElementById('authContainer').innerHTML = currentUser
         ? `<span>${escaparHTML(currentUser.email)}</span> <button class="btn btn-danger" onclick="handleLogout()">Salir</button>`
-        : `<button class="btn btn-primary" onclick="openModal('loginModal')">Iniciar Sesión</button>
-           <button class="btn btn-success" onclick="openModal('registerModal')">Registrarse</button>`;
+        : `<button class="btn btn-primary" onclick="abrirLogin()">Iniciar Sesión</button>`;
 }
 
 function requestReserve(equipId) {
-    if (!currentUser) return alert('Debes iniciar sesión con @uan.edu.co para apartar.');
+    if (!currentUser) return alert('Debes iniciar sesión (elige tu usuario en «Iniciar Sesión») para apartar.');
 
     const equipo = recursos.find(r => r.id === equipId);
     if (!equipo) return;

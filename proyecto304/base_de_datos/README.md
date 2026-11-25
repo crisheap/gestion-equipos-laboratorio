@@ -13,6 +13,7 @@ Base oficial entregada por el profesor (repositorio `jsricop/bd-reservas-error40
 | `04_validaciones_servidor_hora_tope.sql` | Hora tope por equipo, función `reservar_franja`, índices anti doble reserva y RLS. | Equipo (migración 001 sin generar franjas) |
 | `05_devoluciones_y_reserva_dos_semanas.sql` | HU-05/HU-06 (`registrar_devolucion`) y CR-01 (`crear_reserva_dos_semanas`, anulación automática). | Equipo |
 | `07_ajustes_seguridad_rendimiento.sql` | Corrige los avisos de Supabase: `search_path` fijo, funciones internas fuera de la API, política de usuarios optimizada e índice en `reservas.recurso_id`. | Equipo (17 nov) |
+| `08_acceso_por_lista.sql` | Ingreso eligiendo el usuario en una lista desplegable (pedido del PO, proyecto educativo): `listar_usuarios_acceso()` y una cuenta de acceso con clave de demostración común para cada fila de `usuarios`. Las reglas de reserva no cambian. | PO (24 nov) |
 | `06_verificacion.sql` | Solo lectura. Compara la base con los valores esperados. | Equipo |
 | `pruebas/` | Pruebas en transacción que se deshace: no dejan datos. | Equipo |
 | `reparacion/` | Solo si ya se había aplicado la migración 001 original. | Equipo |
@@ -83,3 +84,5 @@ Proyecto `gestion-equipos-laboratorio-uan` (`https://gnhneqorycwupbookpzu.supaba
 - Aplicado `07_ajustes_seguridad_rendimiento.sql` en Supabase. Quedan solo dos avisos: las tres funciones que usa la aplicación (`reservar_franja`, `registrar_devolucion`, `crear_reserva_dos_semanas`), que son intencionales, y la protección contra contraseñas filtradas de Auth.
 - `pruebas/pruebas_integracion_usuario_real.sql` con el usuario real `cherrera31@uan.edu.co`: 9/9 OK (SCRUM-44, 50 y 59), sin datos sobrantes.
 - `pg_cron`: 190 ejecuciones correctas de `anular-reservas-incumplidas` al 17 nov.
+
+- 24 nov: aplicado `08_acceso_por_lista.sql`. El inicio de sesión ya no pide correo ni contraseña: se elige el usuario en la lista. Cualquiera que abra la página puede entrar como cualquier usuario; es intencional para la demo y no debe usarse así con datos reales. Quien entre con una cuenta que no esté en `usuarios` sigue sin poder reservar.
