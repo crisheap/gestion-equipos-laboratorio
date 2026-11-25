@@ -16,12 +16,21 @@ SELECT
   (SELECT fr.id FROM franjas fr JOIN recursos rc ON rc.id = fr.recurso_id
     WHERE fr.fecha > (now() AT TIME ZONE 'America/Bogota')::date AND fr.hora_inicio < rc.hora_tope
       AND NOT EXISTS (SELECT 1 FROM reservas r WHERE r.franja_id = fr.id AND r.estado = 'activa')
+      AND NOT EXISTS (SELECT 1 FROM reservas p WHERE p.recurso_id = fr.recurso_id AND p.estado = 'activa'   -- CC-17: equipo sin devolver
+                       AND p.devuelta_en IS NULL AND p.fecha >= DATE '2026-11-17' AND fn_ahora_bogota() > fn_limite_devolucion(p))
     ORDER BY fr.fecha, fr.hora_inicio LIMIT 1) AS libre,
   (SELECT fr.id FROM franjas fr WHERE fr.fecha < (now() AT TIME ZONE 'America/Bogota')::date
     ORDER BY fr.fecha DESC LIMIT 1) AS pasada,
   (SELECT fr.id FROM franjas fr JOIN recursos rc ON rc.id = fr.recurso_id
     WHERE fr.fecha > (now() AT TIME ZONE 'America/Bogota')::date AND fr.hora_inicio >= rc.hora_tope
-    LIMIT 1) AS tras_tope;
+    LIMIT 1) AS tras_tope,
+  -- CC-17: franja libre de un equipo con un préstamo vencido sin devolver (NULL si no hay ninguno)
+  (SELECT fr.id FROM franjas fr JOIN recursos rc ON rc.id = fr.recurso_id
+    WHERE fr.fecha > (now() AT TIME ZONE 'America/Bogota')::date AND fr.hora_inicio < rc.hora_tope
+      AND NOT EXISTS (SELECT 1 FROM reservas r WHERE r.franja_id = fr.id AND r.estado = 'activa')
+      AND EXISTS (SELECT 1 FROM reservas p WHERE p.recurso_id = fr.recurso_id AND p.estado = 'activa'
+                    AND p.devuelta_en IS NULL AND p.fecha >= DATE '2026-11-17' AND fn_ahora_bogota() > fn_limite_devolucion(p))
+    ORDER BY fr.fecha, fr.hora_inicio LIMIT 1) AS equipo_sin_devolver;
 GRANT SELECT ON f TO authenticated, anon;
 
 SET LOCAL ROLE authenticated;
@@ -58,6 +67,18 @@ DO $$ BEGIN
   VALUES ((SELECT libre FROM f), 1, 2, current_date, '14:00', '16:00', 'activa', now(), now());
   INSERT INTO resultado VALUES ('5 insert directo', 'FALLA', 'RLS no bloqueó la escritura');
 EXCEPTION WHEN OTHERS THEN INSERT INTO resultado VALUES ('5 insert directo', 'OK', SQLERRM); END $$;
+
+-- Caso 6: equipo con un préstamo vencido sin devolver (CC-17)
+DO $$ BEGIN
+  IF (SELECT equipo_sin_devolver FROM f) IS NULL THEN
+    INSERT INTO resultado VALUES ('6 equipo sin devolver', 'OK', 'hoy no hay equipos sin devolver');
+  ELSE
+    PERFORM * FROM reservar_franja((SELECT equipo_sin_devolver FROM f));
+    INSERT INTO resultado VALUES ('6 equipo sin devolver', 'FALLA', 'permitió reservar un equipo que no se ha devuelto');
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  INSERT INTO resultado VALUES ('6 equipo sin devolver', CASE WHEN SQLERRM LIKE 'Este equipo no está disponible%' THEN 'OK' ELSE 'FALLA' END, SQLERRM);
+END $$;
 
 RESET ROLE;
 SELECT * FROM resultado ORDER BY caso;
