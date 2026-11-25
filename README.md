@@ -38,7 +38,7 @@ Equipo **Error 404** · Gestión de Proyectos de Software · UAN Sede Sur, Bogot
 - **Catálogo:** los 15 equipos agrupados por laboratorio, con su hora tope y su estado: *Disponible*, *Prestado ahora* o *En mantenimiento*.
 - **Búsqueda y filtros:** por nombre, tipo, ubicación y estado.
 - **Disponibilidad:** solo se ofrecen las franjas libres, futuras y que empiezan antes de la hora tope del equipo.
-- **Préstamo:** queda asociado a quien inicia sesión con su correo `@uan.edu.co`, con fecha, franja y **hora tope guardada**.
+- **Préstamo:** queda asociado a quien inicia sesión (desde el 24 nov, eligiendo su usuario en una lista desplegable, CC-16), con fecha, franja y **hora tope guardada**.
 - **Reserva de dos semanas (CR-01):** casilla «Reservar también la semana siguiente». Si la segunda semana está ocupada o es festivo, solo se reserva la primera; si el equipo no se devuelve a tiempo la primera semana, la segunda se anula sola.
 - **Mis préstamos y devolución:** cada usuario ve sus préstamos con su estado (*Pendiente*, *Vencido*, *Devuelto a tiempo*, *Devuelto fuera de tiempo*, *Anulada*) y registra la devolución.
 
@@ -58,7 +58,7 @@ Backlog en Jira (proyecto **SCRUM**): 7 historias de usuario en 5 épicas, 47 st
 | HU-06 | Validación de la hora tope y reserva de dos semanas | 8 | 3 | ✅ Finalizado · 23 nov |
 | HU-07 | Consulta y cancelación de préstamos | 5 | — | ⏸ Backlog de producto (salió del Sprint 3 por el CR-01, CC-10) |
 
-Estado al 24 nov de 2026: Sprint 3 cerrado con 16 de 16 SP. El detalle está en las secciones 12.6 a 12.8 del [documento de gestión V4.4](docs/ERROR404_Documento_de_gestion_Corte4_V4.4.pdf).
+Estado al 25 nov de 2026: Sprint 3 cerrado con 16 de 16 SP, más dos ajustes del PO del 24 nov sin cambio de SP: ingreso por lista desplegable (CC-16) y equipo sin devolver no se puede reservar (CC-17). El detalle está en las secciones 2.10 y 12.6 a 12.8 del [documento de gestión V4.5](docs/ERROR404_Documento_de_gestion_Corte4_V4.5.pdf).
 
 **Deuda técnica del Sprint 2, pagada el 11 nov:** validación de reservas en el servidor y hora tope guardada (DT-01), estado del equipo y filtro por estado (DT-02), y trazabilidad entre GitHub y Jira (DT-03).
 
@@ -98,8 +98,9 @@ flowchart LR
 | Reserva de dos semanas: la segunda solo si su franja existe y está libre | `crear_reserva_dos_semanas()` | CR-01 |
 | La devolución se compara con la hora tope y queda *a tiempo* o *fuera de tiempo* | `registrar_devolucion()` | HU-05, HU-06 |
 | Si la primera semana no se devuelve a tiempo, la segunda se anula y la franja queda libre | Disparador + `pg_cron` cada 10 min | CR-01 |
+| Un equipo con un préstamo vencido sin devolver (desde el 17 nov) no admite reservas nuevas hasta que se devuelva | `reservar_franja()` | CC-17 |
 
-Todas las reglas tienen prueba automática en [`proyecto304/base_de_datos/pruebas/`](proyecto304/base_de_datos/pruebas/): 5/5, 9/9 y 9/9 con usuario real (17 nov).
+Todas las reglas tienen prueba automática en [`proyecto304/base_de_datos/pruebas/`](proyecto304/base_de_datos/pruebas/): 6/6, 9/9 y 9/9 con usuario real (24 nov, con el caso nuevo de CC-17).
 
 ## Puesta en marcha
 
@@ -117,7 +118,7 @@ Proyecto de Supabase en uso: **`gestion-equipos-laboratorio-uan`** (desde el 15 
 | 7 | `07_ajustes_seguridad_rendimiento.sql` | Ajustes de los avisos de seguridad de Supabase. |
 | 8 | `08_acceso_por_lista.sql` | Ingreso por lista desplegable de usuarios (demo educativa). |
 | 9 | `09_equipo_sin_devolver.sql` | Un equipo sin devolver no se puede volver a reservar (CC-17). |
-| — | `pruebas/*.sql` | 5/5, 9/9 y 9/9. Se deshacen solas: no dejan datos. |
+| — | `pruebas/*.sql` | 6/6, 9/9 y 9/9. Se deshacen solas: no dejan datos. |
 
 > `supabase_setup_profesor.sql` y `migraciones/001_...sql` quedan solo como historial: el primero no trae el complemento del profesor y la segunda generaba franjas propias que chocan con las oficiales. **No ejecutarlos.**
 
@@ -125,12 +126,14 @@ Proyecto de Supabase en uso: **`gestion-equipos-laboratorio-uan`** (desde el 15 
 
 En **Authentication → Providers**, habilitar *Email* y dejar activa la confirmación de correo. En **URL Configuration**, *Site URL* `https://gestion-equipos-laboratorio-uan.netlify.app` y redirección `https://gestion-equipos-laboratorio-uan.netlify.app/**`.
 
-Solo pueden reservar las cuentas cuyo correo exista en la tabla `usuarios`. Los 40 correos del profesor no reciben correos, así que para demostrar se usan las cuentas reales del equipo; hoy está dada de alta la del PO (CC-13, riesgo R-10).
+Solo pueden reservar las cuentas cuyo correo exista en la tabla `usuarios`.
+
+**Desde el 24 nov (CC-16, demo educativa):** la página no pide correo ni contraseña. «Iniciar Sesión» muestra la lista de los 41 usuarios y, al elegir uno, entra con una clave de demostración común que crea el script `08_acceso_por_lista.sql`. Cualquiera puede entrar como cualquier usuario: no usar así con datos reales.
 
 ### 3. Publicación
 
 1. En [`proyecto304/proyecto.html`](proyecto304/proyecto.html), `SUPABASE_URL` y `SUPABASE_KEY` deben ser los del proyecto. La clave *publishable* es pública por diseño; la seguridad la dan las políticas RLS.
-2. **Despliegue continuo:** el sitio de Netlify `gestion-equipos-laboratorio-uan` está conectado a este repositorio. Cada push a `main` publica automáticamente, según [`netlify.toml`](netlify.toml): publica `proyecto304/` sin compilación, muestra `proyecto.html` en la raíz y no expone los scripts SQL.
+2. **Despliegue continuo:** el sitio de Netlify `gestion-equipos-laboratorio-uan` está conectado a este repositorio. Cada push a `main` publica automáticamente (en pausa desde el 24 nov porque el equipo agotó los créditos del ciclo de Netlify; la versión con CC-16 se ve en la vista previa https://deploy-preview-9--gestion-equipos-laboratorio-uan.netlify.app), según [`netlify.toml`](netlify.toml): publica `proyecto304/` sin compilación, muestra `proyecto.html` en la raíz y no expone los scripts SQL.
 
 > **Plan gratuito:** Supabase pausa el proyecto tras una semana sin uso. Abrir la URL 24 h y 1 h antes de cada Sprint Review (riesgo R-03).
 
@@ -145,7 +148,7 @@ gestion-equipos-laboratorio/
 │   ├── migraciones/001_...sql                 Historial (no usar)
 │   └── pruebas/pruebas_reglas_servidor.sql    Historial; la vigente está en base_de_datos/pruebas
 └── docs/
-    ├── ERROR404_Documento_de_gestion_Corte4_V4.4.docx/.pdf   Documento de gestión vigente (24 nov)
+    ├── ERROR404_Documento_de_gestion_Corte4_V4.5.docx/.pdf   Documento de gestión vigente (25 nov)
     ├── img/                                                   Capturas
     └── historico/                                             Charter, DoD y versiones anteriores
 ```
