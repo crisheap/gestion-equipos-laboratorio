@@ -58,7 +58,7 @@ Backlog en Jira (proyecto **SCRUM**): 7 historias de usuario en 5 épicas, 47 st
 | HU-06 | Validación de la hora tope y reserva de dos semanas | 8 | 3 | ✅ Finalizado · 23 nov |
 | HU-07 | Consulta y cancelación de préstamos | 5 | — | ⏸ Backlog de producto (salió del Sprint 3 por el CR-01, CC-10) |
 
-Estado al 25 nov de 2026: Sprint 3 cerrado con 16 de 16 SP, más dos ajustes del PO del 24 nov sin cambio de SP: ingreso por lista desplegable (CC-16) y equipo sin devolver no se puede reservar (CC-17). El detalle está en las secciones 2.10 y 12.6 a 12.8 del [documento de gestión V4.5](docs/ERROR404_Documento_de_gestion_Corte4_V4.5.pdf).
+Estado al 26 nov de 2026: Sprint 3 cerrado con 16 de 16 SP, más dos ajustes del PO del 24 nov sin cambio de SP: ingreso por lista desplegable (CC-16) y equipo sin devolver no se puede reservar (CC-17). El detalle está en las secciones 2.10 y 12.6 a 12.8 del [documento de gestión V4.6](docs/ERROR404_Documento_de_gestion_Corte4_V4.6.pdf).
 
 **Deuda técnica del Sprint 2, pagada el 11 nov:** validación de reservas en el servidor y hora tope guardada (DT-01), estado del equipo y filtro por estado (DT-02), y trazabilidad entre GitHub y Jira (DT-03).
 
@@ -148,7 +148,7 @@ gestion-equipos-laboratorio/
 │   ├── migraciones/001_...sql                 Historial (no usar)
 │   └── pruebas/pruebas_reglas_servidor.sql    Historial; la vigente está en base_de_datos/pruebas
 └── docs/
-    ├── ERROR404_Documento_de_gestion_Corte4_V4.5.docx/.pdf   Documento de gestión vigente (25 nov)
+    ├── ERROR404_Documento_de_gestion_Corte4_V4.6.docx/.pdf   Documento de gestión vigente (26 nov)
     ├── img/                                                   Capturas
     └── historico/                                             Charter, DoD y versiones anteriores
 ```
