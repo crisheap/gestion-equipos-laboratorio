@@ -98,7 +98,7 @@ flowchart LR
 | Reserva de dos semanas: la segunda solo si su franja existe y está libre | `crear_reserva_dos_semanas()` | CR-01 |
 | La devolución se compara con la hora tope y queda *a tiempo* o *fuera de tiempo* | `registrar_devolucion()` | HU-05, HU-06 |
 | Si la primera semana no se devuelve a tiempo, la segunda se anula y la franja queda libre | Disparador + `pg_cron` cada 10 min | CR-01 |
-| Un equipo con un préstamo vencido sin devolver (desde el 17 nov) no admite reservas nuevas hasta que se devuelva | `reservar_franja()` | CC-17 |
+| Un equipo con un préstamo vencido sin devolver, hecho en la página (no cuentan las 570 reservas semilla del profesor), no admite reservas nuevas hasta que se devuelva | `reservar_franja()` | CC-17 |
 
 Todas las reglas tienen prueba automática en [`proyecto304/base_de_datos/pruebas/`](proyecto304/base_de_datos/pruebas/): 6/6, 9/9 y 9/9 con usuario real (24 nov, con el caso nuevo de CC-17).
 

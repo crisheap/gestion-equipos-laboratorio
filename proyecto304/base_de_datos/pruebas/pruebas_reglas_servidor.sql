@@ -17,7 +17,7 @@ SELECT
     WHERE fr.fecha > (now() AT TIME ZONE 'America/Bogota')::date AND fr.hora_inicio < rc.hora_tope
       AND NOT EXISTS (SELECT 1 FROM reservas r WHERE r.franja_id = fr.id AND r.estado = 'activa')
       AND NOT EXISTS (SELECT 1 FROM reservas p WHERE p.recurso_id = fr.recurso_id AND p.estado = 'activa'   -- CC-17: equipo sin devolver
-                       AND p.devuelta_en IS NULL AND p.fecha >= DATE '2026-11-17' AND fn_ahora_bogota() > fn_limite_devolucion(p))
+                       AND p.devuelta_en IS NULL AND p.id > 570 AND fn_ahora_bogota() > fn_limite_devolucion(p))
     ORDER BY fr.fecha, fr.hora_inicio LIMIT 1) AS libre,
   (SELECT fr.id FROM franjas fr WHERE fr.fecha < (now() AT TIME ZONE 'America/Bogota')::date
     ORDER BY fr.fecha DESC LIMIT 1) AS pasada,
@@ -29,7 +29,7 @@ SELECT
     WHERE fr.fecha > (now() AT TIME ZONE 'America/Bogota')::date AND fr.hora_inicio < rc.hora_tope
       AND NOT EXISTS (SELECT 1 FROM reservas r WHERE r.franja_id = fr.id AND r.estado = 'activa')
       AND EXISTS (SELECT 1 FROM reservas p WHERE p.recurso_id = fr.recurso_id AND p.estado = 'activa'
-                    AND p.devuelta_en IS NULL AND p.fecha >= DATE '2026-11-17' AND fn_ahora_bogota() > fn_limite_devolucion(p))
+                    AND p.devuelta_en IS NULL AND p.id > 570 AND fn_ahora_bogota() > fn_limite_devolucion(p))
     ORDER BY fr.fecha, fr.hora_inicio LIMIT 1) AS equipo_sin_devolver;
 GRANT SELECT ON f TO authenticated, anon;
 
