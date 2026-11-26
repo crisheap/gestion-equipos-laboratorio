@@ -15,7 +15,8 @@ WITH libres AS (
      AND fr.hora_inicio < rc.hora_tope
      AND NOT EXISTS (SELECT 1 FROM reservas r WHERE r.franja_id = fr.id AND r.estado = 'activa')
      AND NOT EXISTS (SELECT 1 FROM reservas p WHERE p.recurso_id = fr.recurso_id AND p.estado = 'activa'   -- CC-17: equipo sin devolver
-                       AND p.devuelta_en IS NULL AND p.fecha >= DATE '2026-11-17' AND fn_ahora_bogota() > fn_limite_devolucion(p)))
+                       AND p.devuelta_en IS NULL AND p.id > 570 AND fn_ahora_bogota() > fn_limite_devolucion(p))
+     AND fr.recurso_id <> 1   -- el equipo 1 lo usa esta prueba para su préstamo vencido (#900001))
 SELECT
   (SELECT a.id FROM libres a JOIN libres b ON b.recurso_id = a.recurso_id AND b.fecha = a.fecha + 7 AND b.hora_inicio = a.hora_inicio ORDER BY a.fecha, a.id LIMIT 1) AS par_libre,
   (SELECT a.id FROM libres a JOIN franjas b ON b.recurso_id = a.recurso_id AND b.fecha = a.fecha + 7 AND b.hora_inicio = a.hora_inicio

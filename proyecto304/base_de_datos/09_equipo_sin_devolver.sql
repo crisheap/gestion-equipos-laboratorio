@@ -8,9 +8,12 @@
 -- se devuelva.
 --
 -- Decisiones del PO:
---   * Solo cuentan los préstamos desde el 17 nov 2026 (arranque del
---     sistema). Los préstamos anteriores de los datos del profesor quedan
---     como historial: no se modifica ningún dato.
+--   * Solo cuentan los préstamos hechos en la página. Las 570 reservas
+--     semilla del profesor (ids 1 a 570, scripts 02 y 03) quedan como
+--     historial: traen préstamos programados hasta el 31 dic que nadie
+--     devuelve en el sistema y bloquearían todos los equipos. Ajuste del
+--     26 nov; la primera versión contaba desde el 17 nov. No se modifica
+--     ningún dato.
 --   * Las reservas futuras que ya existían se mantienen; solo se bloquean
 --     las reservas nuevas.
 --
@@ -70,14 +73,15 @@ BEGIN
     RAISE EXCEPTION 'Franja no disponible: otra persona ya la reservó.' USING ERRCODE = 'P0001';
   END IF;
 
-  -- CC-17: el equipo es una sola unidad. Si un préstamo (desde el 17 nov) ya
-  -- pasó su hora tope sin devolución registrada, el equipo sigue afuera.
+  -- CC-17: el equipo es una sola unidad. Si un préstamo hecho en la página
+  -- (no semilla del profesor) ya pasó su hora tope sin devolución registrada,
+  -- el equipo sigue afuera.
   SELECT r.id, r.fecha INTO v_pend_id, v_pend_fec
     FROM reservas r
    WHERE r.recurso_id = v_franja.recurso_id
      AND r.estado = 'activa'
      AND r.devuelta_en IS NULL
-     AND r.fecha >= DATE '2026-11-17'
+     AND r.id > 570          -- 1 a 570: reservas semilla del profesor
      AND fn_ahora_bogota() > fn_limite_devolucion(r)
    ORDER BY r.fecha, r.hora_inicio
    LIMIT 1;
