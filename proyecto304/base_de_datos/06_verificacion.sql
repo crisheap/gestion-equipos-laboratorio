@@ -3,7 +3,7 @@
 -- Ejecutar al final. Compara cada valor con lo esperado.
 -- =====================================================================
 SELECT 'recursos' AS dato, count(*)::text AS valor, '15' AS esperado FROM recursos
-UNION ALL SELECT 'usuarios', count(*)::text, '40' FROM usuarios
+UNION ALL SELECT 'usuarios (40 del profesor + PO, CC-13)', count(*)::text, '41' FROM usuarios
 UNION ALL SELECT 'franjas', count(*)::text, '7110' FROM franjas
 UNION ALL SELECT 'última fecha con franjas', max(fecha)::text, '2026-12-31' FROM franjas
 UNION ALL SELECT 'días hábiles con franjas', count(DISTINCT fecha)::text, '79' FROM franjas

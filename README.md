@@ -58,7 +58,7 @@ Backlog en Jira (proyecto **SCRUM**): 7 historias de usuario en 5 épicas, 47 st
 | HU-06 | Validación de la hora tope y reserva de dos semanas | 8 | 3 | ✅ Finalizado · 23 nov |
 | HU-07 | Consulta y cancelación de préstamos | 5 | — | ⏸ Backlog de producto (salió del Sprint 3 por el CR-01, CC-10) |
 
-Estado al 26 nov de 2026: Sprint 3 cerrado con 16 de 16 SP, más dos ajustes del PO del 24 nov sin cambio de SP: ingreso por lista desplegable (CC-16) y equipo sin devolver no se puede reservar (CC-17). El detalle está en las secciones 2.10 y 12.6 a 12.8 del [documento de gestión V4.6](docs/ERROR404_Documento_de_gestion_Corte4_V4.6.pdf).
+Estado al 27 nov de 2026 (día de la Sprint Review): Sprint 3 cerrado con 16 de 16 SP, más dos ajustes del PO del 24 nov sin cambio de SP: ingreso por lista desplegable (CC-16) y equipo sin devolver no se puede reservar (CC-17). El detalle está en las secciones 2.10 y 12.6 a 12.8 del [documento de gestión V4.7, versión final del Sprint 3](docs/ERROR404_Documento_de_gestion_Corte4_V4.7.pdf).
 
 **Deuda técnica del Sprint 2, pagada el 11 nov:** validación de reservas en el servidor y hora tope guardada (DT-01), estado del equipo y filtro por estado (DT-02), y trazabilidad entre GitHub y Jira (DT-03).
 
@@ -100,7 +100,7 @@ flowchart LR
 | Si la primera semana no se devuelve a tiempo, la segunda se anula y la franja queda libre | Disparador + `pg_cron` cada 10 min | CR-01 |
 | Un equipo con un préstamo vencido sin devolver, hecho en la página (no cuentan las 570 reservas semilla del profesor), no admite reservas nuevas hasta que se devuelva | `reservar_franja()` | CC-17 |
 
-Todas las reglas tienen prueba automática en [`proyecto304/base_de_datos/pruebas/`](proyecto304/base_de_datos/pruebas/): 6/6, 9/9 y 9/9 con usuario real (24 nov, con el caso nuevo de CC-17).
+Todas las reglas tienen prueba automática en [`proyecto304/base_de_datos/pruebas/`](proyecto304/base_de_datos/pruebas/): 13/13 de verificación, 6/6, 9/9 y 9/9 con usuario real: 37 de 37 al 27 nov.
 
 ## Puesta en marcha
 
@@ -148,7 +148,7 @@ gestion-equipos-laboratorio/
 │   ├── migraciones/001_...sql                 Historial (no usar)
 │   └── pruebas/pruebas_reglas_servidor.sql    Historial; la vigente está en base_de_datos/pruebas
 └── docs/
-    ├── ERROR404_Documento_de_gestion_Corte4_V4.6.docx/.pdf   Documento de gestión vigente (26 nov)
+    ├── ERROR404_Documento_de_gestion_Corte4_V4.7.docx/.pdf   Documento de gestión vigente, final del Sprint 3 (27 nov)
     ├── img/                                                   Capturas
     └── historico/                                             Charter, DoD y versiones anteriores
 ```
